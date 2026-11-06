@@ -1,7 +1,8 @@
 -- ============================================================
---  CHINA HUB FREE  v5.0  —  King Legacy
---  Quest via RemoteFunction  |  workspace.Monster.Mon/Boss
---  Mob-Lock Aereo  |  UI redesenhada sem emojis
+--  CHINA HUB FREE  v6.0  —  King Legacy
+--  Farm universal: scan de Humanoid vivos em qualquer folder
+--  Quest: RF + ProximityPrompt fallback
+--  Sem aba Home
 -- ============================================================
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
@@ -16,231 +17,177 @@ local LP     = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
 
 -- ============================================================
---  LEVEL E QUEST
+--  LEVEL
 -- ============================================================
 local function GetLevel()
+    -- King Legacy: PlayerStats.lvl
     local ps = LP:FindFirstChild("PlayerStats")
-    if ps and ps:FindFirstChild("lvl") then return tonumber(ps.lvl.Value) or 1 end
+    if ps then
+        for _, n in ipairs({"lvl","Level","Lv","level"}) do
+            local v = ps:FindFirstChild(n)
+            if v then return math.max(1, tonumber(v.Value) or 1) end
+        end
+    end
     local ls = LP:FindFirstChild("leaderstats")
     if ls then
         for _, n in ipairs({"Level","Lv","level","lvl"}) do
             local v = ls:FindFirstChild(n)
-            if v then return tonumber(v.Value) or 1 end
-        end
-    end
-    for _, v in ipairs(LP:GetDescendants()) do
-        if (v.Name=="Level" or v.Name=="lvl") and
-           (v:IsA("IntValue") or v:IsA("NumberValue")) then
-            return tonumber(v.Value) or 1
+            if v then return math.max(1, tonumber(v.Value) or 1) end
         end
     end
     return 1
 end
 
-local function GetCurrentQuest()
-    if LP:FindFirstChild("CurrentQuest") then return LP.CurrentQuest.Value end
-    return ""
-end
+-- ============================================================
+--  ZONAS — coordenadas reais Starter + Pirate confirmadas
+--  demais: calibrar in-game
+-- ============================================================
+local Zones = {
+    { name="Starter Island",  minLv=1,   maxLv=49,
+      islePos=Vector3.new(-2044,100,-4591),
+      mobPos= Vector3.new(-2044,100,-4591), radius=400 },
 
--- ============================================================
---  TABELA DE QUESTS REAIS DO KING LEGACY
---  Nomes exatos dos mobs/quests extraidos do workspace real
--- ============================================================
-local QuestZones = {
-    {
-        name="Starter Island", minLv=1, maxLv=9,
-        questDesc="Kill 4 Soldiers",
-        mobName="Soldier [Lv.1]", isBoss=false,
-        islePos=Vector3.new(-2044,100,-4591),
-        mobPos=Vector3.new(-2044,100,-4591),
-    },
-    {
-        name="Starter Island", minLv=10, maxLv=19,
-        questDesc="Kill 5 Clown Pirates",
-        mobName="Clown Pirate [Lv.10]", isBoss=false,
-        islePos=Vector3.new(-2044,100,-4591),
-        mobPos=Vector3.new(-2044,100,-4591),
-    },
-    {
-        name="Starter Island", minLv=20, maxLv=29,
-        questDesc="Kill 1 Smoky",
-        mobName="Smoky [Lv.20]", isBoss=true,
-        islePos=Vector3.new(-2044,100,-4591),
-        mobPos=Vector3.new(-2044,100,-4591),
-    },
-    {
-        name="Starter Island", minLv=30, maxLv=49,
-        questDesc="Kill 1 Tashi",
-        mobName="Tashi [Lv.30]", isBoss=true,
-        islePos=Vector3.new(-2044,100,-4591),
-        mobPos=Vector3.new(-2044,100,-4591),
-    },
-    {
-        name="Pirate Island", minLv=50, maxLv=74,
-        questDesc="Kill 6 Clown Swordman",
-        mobName="Clown Swordman [Lv.50]", isBoss=false,
-        islePos=Vector3.new(-681,64,-3449),
-        mobPos=Vector3.new(-681,64,-3449),
-    },
-    {
-        name="Pirate Island", minLv=75, maxLv=99,
-        questDesc="Kill 1 The Clown",
-        mobName="The Clown [Lv.75]", isBoss=true,
-        islePos=Vector3.new(-681,64,-3449),
-        mobPos=Vector3.new(-681,64,-3449),
-    },
-    {
-        name="Soldier Island", minLv=100, maxLv=139,
-        questDesc="Kill 8 Marines",
-        mobName="Marine [Lv.100]", isBoss=false,
-        islePos=Vector3.new(990,28,-510),
-        mobPos=Vector3.new(948,28,-472),
-    },
-    {
-        name="Soldier Island", minLv=140, maxLv=179,
-        questDesc="Kill 1 Ax-Hand Morgan",
-        mobName="Ax-Hand Morgan [Lv.140]", isBoss=true,
-        islePos=Vector3.new(990,28,-510),
-        mobPos=Vector3.new(948,28,-472),
-    },
-    {
-        name="Shark Island", minLv=180, maxLv=224,
-        questDesc="Kill 8 Fish Pirates",
-        mobName="Fish Pirate [Lv.180]", isBoss=false,
-        islePos=Vector3.new(1822,28,1492),
-        mobPos=Vector3.new(1778,28,1448),
-    },
-    {
-        name="Shark Island", minLv=225, maxLv=249,
-        questDesc="Kill 1 Arlong",
-        mobName="Arlong [Lv.225]", isBoss=true,
-        islePos=Vector3.new(1822,28,1492),
-        mobPos=Vector3.new(1778,28,1448),
-    },
-    {
-        name="Chef Ship", minLv=250, maxLv=349,
-        questDesc="Kill 8 Don Krieg Pirates",
-        mobName="Don Krieg Pirate [Lv.250]", isBoss=false,
-        islePos=Vector3.new(-792,28,1242),
-        mobPos=Vector3.new(-832,28,1198),
-    },
-    {
-        name="Chef Ship", minLv=350, maxLv=399,
-        questDesc="Kill 1 Don Krieg",
-        mobName="Don Krieg [Lv.350]", isBoss=true,
-        islePos=Vector3.new(-792,28,1242),
-        mobPos=Vector3.new(-832,28,1198),
-    },
-    {
-        name="Snow Island", minLv=400, maxLv=524,
-        questDesc="Kill 8 Snow Soldiers",
-        mobName="Snow Soldier [Lv.400]", isBoss=false,
-        islePos=Vector3.new(1622,28,-872),
-        mobPos=Vector3.new(1575,28,-935),
-    },
-    {
-        name="Sand Kingdom", minLv=525, maxLv=799,
-        questDesc="Kill 8 Sand Pirates",
-        mobName="Sand Pirate [Lv.525]", isBoss=false,
-        islePos=Vector3.new(-3052,28,1978),
-        mobPos=Vector3.new(-3105,28,2022),
-    },
-    {
-        name="Sky Island", minLv=800, maxLv=999,
-        questDesc="Kill 8 Sky Warriors",
-        mobName="Sky Warrior [Lv.800]", isBoss=false,
-        islePos=Vector3.new(-2822,865,-1632),
-        mobPos=Vector3.new(-2892,858,-1702),
-    },
-    {
-        name="Bubble Island", minLv=1000, maxLv=9999,
-        questDesc="Kill 8 Bubble Pirates",
-        mobName="Bubble Pirate [Lv.1000]", isBoss=false,
-        islePos=Vector3.new(2552,28,-2058),
-        mobPos=Vector3.new(2508,28,-2135),
-    },
+    { name="Pirate Island",   minLv=50,  maxLv=99,
+      islePos=Vector3.new(-681,64,-3449),
+      mobPos= Vector3.new(-681,64,-3449),  radius=400 },
+
+    { name="Soldier Island",  minLv=100, maxLv=179,
+      islePos=Vector3.new(990,28,-510),
+      mobPos= Vector3.new(990,28,-510),    radius=400 },
+
+    { name="Shark Island",    minLv=180, maxLv=249,
+      islePos=Vector3.new(1822,28,1492),
+      mobPos= Vector3.new(1822,28,1492),   radius=400 },
+
+    { name="Chef Ship",       minLv=250, maxLv=399,
+      islePos=Vector3.new(-792,28,1242),
+      mobPos= Vector3.new(-792,28,1242),   radius=400 },
+
+    { name="Snow Island",     minLv=400, maxLv=524,
+      islePos=Vector3.new(1622,28,-872),
+      mobPos= Vector3.new(1622,28,-872),   radius=400 },
+
+    { name="Sand Kingdom",    minLv=525, maxLv=799,
+      islePos=Vector3.new(-3052,28,1978),
+      mobPos= Vector3.new(-3052,28,1978),  radius=400 },
+
+    { name="Sky Island",      minLv=800, maxLv=999,
+      islePos=Vector3.new(-2822,865,-1632),
+      mobPos= Vector3.new(-2822,865,-1632),radius=400 },
+
+    { name="Bubble Island",   minLv=1000,maxLv=9999,
+      islePos=Vector3.new(2552,28,-2058),
+      mobPos= Vector3.new(2552,28,-2058),  radius=400 },
 }
 
 local function GetZone(lv)
-    for _, z in ipairs(QuestZones) do
+    for _, z in ipairs(Zones) do
         if lv >= z.minLv and lv <= z.maxLv then return z end
     end
-    return QuestZones[#QuestZones]
+    return Zones[#Zones]
 end
 
 -- ============================================================
---  QUEST VIA REMOTEFUNCTION (metodo real do KL)
+--  ENCONTRAR MOB — scan universal, qualquer folder
+--  Nao depende de workspace.Monster nem de nomes especificos
+-- ============================================================
+local function FindMob(nearPos, radius)
+    local char = LP.Character
+    if not char then return nil end
+    local best, bestD = nil, math.huge
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and obj ~= char
+           and not Players:GetPlayerFromCharacter(obj) then
+            local hum = obj:FindFirstChildOfClass("Humanoid")
+            local hrp = obj:FindFirstChild("HumanoidRootPart")
+            if hum and hrp and hum.Health > 0 then
+                local d = (hrp.Position - nearPos).Magnitude
+                if d < radius and d < bestD then
+                    bestD = d; best = obj
+                end
+            end
+        end
+    end
+    return best, bestD
+end
+
+-- ============================================================
+--  ACEITAR QUEST
+--  Tenta RemoteFunction (King Legacy oficial) depois ProximityPrompt
 -- ============================================================
 local questRF = nil
-local function GetQuestRF()
+
+local function TryGetRF()
     if questRF then return questRF end
-    pcall(function()
-        questRF = RS:WaitForChild("Chest",3)
-                    :WaitForChild("Functions",3)
-                    :WaitForChild("Quest",3)
-    end)
-    return questRF
+    -- tenta os paths conhecidos do KL
+    local paths = {
+        {"Chest","Functions","Quest"},
+        {"Remotes","Quest"},
+        {"RemoteEvents","Quest"},
+        {"Functions","Quest"},
+    }
+    for _, p in ipairs(paths) do
+        local cur = RS
+        local ok = true
+        for _, seg in ipairs(p) do
+            local next = cur:FindFirstChild(seg)
+            if not next then ok=false; break end
+            cur = next
+        end
+        if ok then questRF = cur; return questRF end
+    end
+    return nil
 end
 
-local function TakeQuest(desc)
-    local rf = GetQuestRF(); if not rf then return false end
+local function TakeQuestRF(desc)
+    local rf = TryGetRF(); if not rf then return false end
     local ok = pcall(function() rf:InvokeServer("take", desc) end)
+    if not ok then
+        ok = pcall(function() rf:InvokeServer(desc) end)
+    end
     return ok
 end
 
-local function FinishQuest(desc)
-    local rf = GetQuestRF(); if not rf then return false end
-    pcall(function() rf:InvokeServer("finish", desc) end)
+-- ProximityPrompt fallback: scan de PPr com texto de quest
+local function FindQuestPrompt(nearPos, radius)
+    local best, bestD = nil, math.huge
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("ProximityPrompt") then
+            local part = obj.Parent
+            if not (part and part:IsA("BasePart")) then continue end
+            local d = (part.Position - nearPos).Magnitude
+            if d >= radius or d >= bestD then continue end
+            -- filtra barcos
+            local isBoat = false
+            local cur = part
+            for _ = 1, 6 do
+                cur = cur.Parent
+                if not cur then break end
+                local n = cur.Name:lower()
+                if n:find("boat") or n:find("ship") or n:find("navio") then
+                    isBoat = true; break
+                end
+            end
+            if isBoat then continue end
+            local at = (obj.ActionText or ""):lower()
+            local ot = (obj.ObjectText  or ""):lower()
+            if at:find("quest") or at:find("miss") or at:find("interag")
+               or ot:find("quest") then
+                best = obj; bestD = d
+            end
+            -- modelo pai chamado "Quest"
+            local model = part.Parent
+            if model and model:IsA("Model") and model.Name:lower():find("quest") then
+                best = obj; bestD = d
+            end
+        end
+    end
+    return best
 end
 
--- ============================================================
---  ENCONTRAR MOB NO WORKSPACE
--- ============================================================
-local function FindMob(mobName, isBoss)
-    local mon = workspace:FindFirstChild("Monster")
-    if not mon then
-        -- fallback: scan geral
-        for _, obj in ipairs(workspace:GetDescendants()) do
-            if obj:IsA("Model") and obj.Name == mobName then
-                local h = obj:FindFirstChildOfClass("Humanoid")
-                local hrp = obj:FindFirstChild("HumanoidRootPart")
-                if h and hrp and h.Health > 0 then return obj end
-            end
-        end
-        return nil
-    end
-    local folder = isBoss
-        and (mon:FindFirstChild("Boss") or mon)
-        or  (mon:FindFirstChild("Mon")  or mon)
-    -- nome exato
-    local exact = folder:FindFirstChild(mobName)
-    if exact then
-        local h = exact:FindFirstChildOfClass("Humanoid")
-        if h and h.Health > 0 and exact:FindFirstChild("HumanoidRootPart") then
-            return exact
-        end
-    end
-    -- busca parcial (cobre variações de versao)
-    local base = mobName:match("^([%a%s]+)") or mobName:sub(1,8)
-    for _, obj in ipairs(folder:GetChildren()) do
-        if obj.Name:find(base, 1, true) then
-            local h = obj:FindFirstChildOfClass("Humanoid")
-            local hrp = obj:FindFirstChild("HumanoidRootPart")
-            if h and hrp and h.Health > 0 then return obj end
-        end
-    end
-    -- ultimo recurso: scan em todo workspace.Monster
-    for _, obj in ipairs(mon:GetDescendants()) do
-        if obj:IsA("Model") then
-            local h = obj:FindFirstChildOfClass("Humanoid")
-            local hrp = obj:FindFirstChild("HumanoidRootPart")
-            if h and hrp and h.Health > 0
-               and not Players:GetPlayerFromCharacter(obj) then
-                return obj
-            end
-        end
-    end
-    return nil
+local function FirePP(pp)
+    if not pp then return end
+    pcall(function() fireproximityprompt(pp) end)
 end
 
 -- ============================================================
@@ -248,74 +195,73 @@ end
 -- ============================================================
 local Farm = {
     Active      = false,
-    State       = "idle",
+    State       = "idle",    -- idle|tozone|fighting
     StatusText  = "Inativo",
     Style       = "melee",
     KillCount   = 0,
     TargetKills = 10,
     HoverY      = 5,
     Zone        = nil,
-    Timer       = 0,
+    UseQuest    = true,     -- se false, so mata mobs sem aceitar quest
 }
 local AutoAttack = false
 local SEA_Y      = 15
-local seaFails   = 0
 
-local function SetCharCollision(v)
+-- ============================================================
+--  TELEPORTE
+-- ============================================================
+local function SetCollision(v)
     local char = LP.Character; if not char then return end
     for _, p in ipairs(char:GetDescendants()) do
         if p:IsA("BasePart") then p.CanCollide = v end
     end
 end
 
--- ============================================================
---  TELEPORTE SEGURO
--- ============================================================
+local seaFails = 0
 local function SafeTP(pos)
     local char = LP.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return false end
     char.HumanoidRootPart.CFrame = CFrame.new(
-        Vector3.new(pos.X, math.max(pos.Y, 60), pos.Z)
+        Vector3.new(pos.X, math.max(pos.Y + 5, 60), pos.Z)
     )
     task.wait(1.2)
     if char.HumanoidRootPart.Position.Y < SEA_Y then
         seaFails = seaFails + 1
-        Farm.StatusText = ("COORD ERRADA (%d/3) — Calibre a zona"):format(seaFails)
+        Farm.StatusText = ("COORD ERRADA (%d/3) — Calibre"):format(seaFails)
         if seaFails >= 3 then
             Farm.Active = false; Farm.State = "idle"; seaFails = 0
-            Farm.StatusText = "FARM PAUSADO — Calibre as coordenadas"
-        else
-            Farm.State = "idle"
-        end
+            Farm.StatusText = "PAUSADO — Calibre as coords na aba Farm"
+        else Farm.State = "idle" end
         return false
     end
-    seaFails = 0
-    return true
+    seaFails = 0; return true
 end
 
 -- ============================================================
---  ATAQUE
+--  ATAQUE — hover acima + VIM click
 -- ============================================================
-local function EquipSword()
+local function EquipFirst()
     local char = LP.Character; if not char then return end
     for _, t in ipairs(LP.Backpack:GetChildren()) do
         if t:IsA("Tool") then
             local n = t.Name:lower()
-            if n:find("sword") or n:find("katana") or n:find("blade") then
-                char.Humanoid:EquipTool(t); task.wait(0.3); return true
+            if Farm.Style == "sword" then
+                if n:find("sword") or n:find("katana") or n:find("blade") or n:find("cutlass") then
+                    char.Humanoid:EquipTool(t); task.wait(0.25); return
+                end
+            else
+                char.Humanoid:EquipTool(t); task.wait(0.25); return
             end
         end
     end
-    local t = LP.Backpack:FindFirstChildOfClass("Tool")
-    if t then char.Humanoid:EquipTool(t); task.wait(0.3) end
 end
 
 local function PressKey(kc)
     pcall(function()
         if syn and syn.key_press then
-            syn.key_press(kc); task.wait(0.08); syn.key_release(kc)
+            syn.key_press(kc); task.wait(0.07); syn.key_release(kc)
         elseif keypress then
-            keypress(kc); task.wait(0.08); if keyrelease then keyrelease(kc) end
+            keypress(kc); task.wait(0.07); if keyrelease then keyrelease(kc) end
         end
     end)
 end
@@ -324,22 +270,162 @@ local function AttackMob(mob)
     local char = LP.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
     local hrp = mob:FindFirstChild("HumanoidRootPart"); if not hrp then return end
-    local hoverPos = hrp.Position + Vector3.new(0, Farm.HoverY, 0)
-    char.HumanoidRootPart.CFrame = CFrame.lookAt(hoverPos, hrp.Position)
-    SetCharCollision(false)
-    if Farm.Style == "fruit" then PressKey(0x5A) end
-    if Farm.Style == "sword" then EquipSword() end
+
+    -- posiciona acima do mob, olhando para baixo
+    local over = hrp.Position + Vector3.new(0, Farm.HoverY, 0)
+    char.HumanoidRootPart.CFrame = CFrame.lookAt(over, hrp.Position)
+    SetCollision(false)
+
+    if Farm.Style == "fruit" then
+        PressKey(0x5A)  -- Z
+        task.wait(0.05)
+        PressKey(0x58)  -- X
+    elseif Farm.Style == "sword" then
+        EquipFirst()
+    end
+
     local sp, _, onScr = Camera:WorldToViewportPoint(hrp.Position)
     if onScr then
         local x, y = math.floor(sp.X), math.floor(sp.Y)
-        VIM:SendMouseButtonEvent(x, y, 0, true, game, 0)
-        task.wait(0.05)
+        VIM:SendMouseButtonEvent(x, y, 0, true,  game, 0)
+        task.wait(0.06)
         VIM:SendMouseButtonEvent(x, y, 0, false, game, 0)
     end
 end
 
 -- ============================================================
---  AUTO ATAQUE INDEPENDENTE (aba Misc)
+--  AUTO FARM LOOP
+-- ============================================================
+task.spawn(function()
+    while true do
+        task.wait(0.25)
+        if not Farm.Active then
+            Farm.State = "idle"; SetCollision(true); continue
+        end
+
+        local char = LP.Character
+        if not char or not char:FindFirstChild("HumanoidRootPart") then
+            task.wait(1); continue
+        end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then
+            SetCollision(true)
+            Farm.StatusText = "Respawnando..."
+            Farm.State = "idle"; task.wait(4); continue
+        end
+
+        local lv   = GetLevel()
+        local zone = GetZone(lv)
+
+        -- IDLE: define zona e vai
+        if Farm.State == "idle" then
+            Farm.Zone      = zone
+            Farm.KillCount = 0
+            Farm.StatusText = ("Lv %d  |  %s  |  Viajando"):format(lv, zone.name)
+            Farm.State = "tozone"
+
+        -- TOZONE: TP + aceita quest
+        elseif Farm.State == "tozone" then
+            local ok = SafeTP(Farm.Zone.mobPos)
+            if not ok then continue end
+
+            -- tenta aceitar quest
+            if Farm.UseQuest then
+                -- metodo 1: RemoteFunction
+                local questDescs = {
+                    [1]  = "Kill 4 Soldiers",
+                    [10] = "Kill 5 Clown Pirates",
+                    [20] = "Kill 1 Smoky",
+                    [30] = "Kill 1 Tashi",
+                    [50] = "Kill 6 Clown Swordman",
+                    [75] = "Kill 1 The Clown",
+                    [100]= "Kill 8 Marines",
+                    [140]= "Kill 1 Ax-Hand Morgan",
+                    [180]= "Kill 8 Fish Pirates",
+                    [225]= "Kill 1 Arlong",
+                    [250]= "Kill 8 Don Krieg Pirates",
+                    [350]= "Kill 1 Don Krieg",
+                    [400]= "Kill 8 Snow Soldiers",
+                    [525]= "Kill 8 Sand Pirates",
+                    [800]= "Kill 8 Sky Warriors",
+                }
+                local desc = nil
+                for threshold, d in pairs(questDescs) do
+                    if lv >= threshold then
+                        if desc == nil then
+                            desc = d
+                        end
+                    end
+                end
+                -- pega o desc do threshold mais alto <= lv
+                local bestThresh = -1
+                for threshold, d in pairs(questDescs) do
+                    if lv >= threshold and threshold > bestThresh then
+                        bestThresh = threshold; desc = d
+                    end
+                end
+
+                if desc then
+                    TakeQuestRF(desc)
+                    task.wait(0.5)
+                end
+
+                -- metodo 2: ProximityPrompt fallback
+                local pp = FindQuestPrompt(Farm.Zone.islePos, 350)
+                if pp then
+                    FirePP(pp); task.wait(0.4)
+                    FirePP(pp); task.wait(0.3)
+                end
+            end
+
+            if Farm.Style == "sword" then EquipFirst() end
+
+            Farm.State     = "fighting"
+            Farm.KillCount = 0
+            Farm.StatusText = ("Lv %d  |  %s  |  Lutando"):format(lv, zone.name)
+
+        -- FIGHTING: mata mobs
+        elseif Farm.State == "fighting" then
+            local mob, dist = FindMob(Farm.Zone.mobPos, Farm.Zone.radius)
+
+            if mob and mob:FindFirstChild("HumanoidRootPart") then
+                local hrp = mob.HumanoidRootPart
+                if hrp.Position.Y < SEA_Y then task.wait(0.3); continue end
+
+                local hBefore = mob:FindFirstChildOfClass("Humanoid")
+                local hpB     = hBefore and hBefore.Health or 0
+
+                AttackMob(mob); task.wait(0.15)
+
+                local hAfter = mob:FindFirstChildOfClass("Humanoid")
+                if not hAfter or hAfter.Health <= 0 then
+                    if hpB > 0 then Farm.KillCount = Farm.KillCount + 1 end
+                end
+
+                local curHp = hAfter and math.floor(hAfter.Health) or 0
+                Farm.StatusText = ("Lv %d  |  %s  |  %d/%d kills  |  HP %d"):format(
+                    lv, zone.name, Farm.KillCount, Farm.TargetKills, curHp)
+
+                if Farm.KillCount >= Farm.TargetKills then
+                    SetCollision(true)
+                    Farm.State = "idle"
+                    Farm.StatusText = ("Lv %d  |  Ciclo completo! Reiniciando..."):format(lv)
+                end
+            else
+                -- nenhum mob: re-TP na area
+                SafeTP(Farm.Zone.mobPos)
+                Farm.StatusText = ("Lv %d  |  %s  |  Aguardando spawn..."):format(lv, zone.name)
+                if Farm.KillCount >= Farm.TargetKills then
+                    SetCollision(true); Farm.State = "idle"
+                end
+                task.wait(2)
+            end
+        end
+    end
+end)
+
+-- ============================================================
+--  AUTO ATAQUE INDEPENDENTE
 -- ============================================================
 task.spawn(function()
     while true do
@@ -349,182 +435,51 @@ task.spawn(function()
         if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
         local hum = char:FindFirstChildOfClass("Humanoid")
         if not hum or hum.Health <= 0 then task.wait(2); continue end
-        -- mob mais proximo no workspace.Monster
-        local mon = workspace:FindFirstChild("Monster")
-        local best, bestD = nil, math.huge
-        if mon then
-            for _, obj in ipairs(mon:GetDescendants()) do
-                if obj:IsA("Model") then
-                    local h = obj:FindFirstChildOfClass("Humanoid")
-                    local hrp = obj:FindFirstChild("HumanoidRootPart")
-                    if h and hrp and h.Health > 0
-                       and not Players:GetPlayerFromCharacter(obj) then
-                        local d = (char.HumanoidRootPart.Position - hrp.Position).Magnitude
-                        if d < bestD then bestD = d; best = obj end
-                    end
-                end
-            end
-        end
-        if best then AttackMob(best) end
-    end
-end)
-
--- ============================================================
---  AUTO FARM PRINCIPAL
---  idle → toisle → takequest → fighting → returning → idle
--- ============================================================
-task.spawn(function()
-    while true do
-        task.wait(0.3)
-        if not Farm.Active then Farm.State="idle"; SetCharCollision(true); continue end
-        local char = LP.Character
-        if not char or not char:FindFirstChild("HumanoidRootPart") then task.wait(1); continue end
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if not hum or hum.Health <= 0 then
-            SetCharCollision(true)
-            Farm.StatusText = "Aguardando respawn..."
-            Farm.State = "idle"; task.wait(4); continue
-        end
-
-        local lv   = GetLevel()
-        local zone = GetZone(lv)
-
-        -- IDLE
-        if Farm.State == "idle" then
-            Farm.Zone      = zone
-            Farm.KillCount = 0
-            Farm.State     = "toisle"
-            Farm.Timer     = tick()
-            Farm.StatusText = ("Lv %d  |  %s  |  Viajando"):format(lv, zone.name)
-
-        -- TOISLE: teleporta para a ilha e aceita quest
-        elseif Farm.State == "toisle" then
-            local ok = SafeTP(Farm.Zone.islePos)
-            if not ok then continue end
-            task.wait(0.8)
-
-            -- tenta aceitar quest
-            local curQ = GetCurrentQuest()
-            if curQ ~= Farm.Zone.questDesc then
-                TakeQuest(Farm.Zone.questDesc)
-                task.wait(0.8)
-                TakeQuest(Farm.Zone.questDesc) -- double-fire por seguranca
-                task.wait(0.5)
-            end
-
-            if Farm.Style == "sword" then EquipSword() end
-
-            -- TP para area dos mobs
-            SafeTP(Farm.Zone.mobPos)
-            task.wait(0.8)
-
-            Farm.State     = "fighting"
-            Farm.KillCount = 0
-            Farm.Timer     = tick()
-            Farm.StatusText = ("Lv %d  |  %s  |  Lutando"):format(lv, zone.name)
-
-        -- FIGHTING: hover + ataque
-        elseif Farm.State == "fighting" then
-            -- timeout de seguranca
-            if tick() - Farm.Timer > 120 then
-                SetCharCollision(true)
-                Farm.State = "returning"; continue
-            end
-
-            local mob = FindMob(Farm.Zone.mobName, Farm.Zone.isBoss)
-
-            if mob and mob:FindFirstChild("HumanoidRootPart") then
-                local hrp = mob.HumanoidRootPart
-                if hrp.Position.Y < SEA_Y then task.wait(0.3); continue end
-
-                local hBefore = mob:FindFirstChildOfClass("Humanoid")
-                local hpBefore = hBefore and hBefore.Health or 0
-
-                AttackMob(mob)
-                task.wait(0.15)
-
-                local hAfter = mob:FindFirstChildOfClass("Humanoid")
-                if not hAfter or hAfter.Health <= 0 then
-                    if hpBefore > 0 then Farm.KillCount = Farm.KillCount + 1 end
-                end
-
-                local curHp = hAfter and math.floor(hAfter.Health) or 0
-                Farm.StatusText = ("Lv %d  |  Kills %d/%d  |  HP %d"):format(
-                    lv, Farm.KillCount, Farm.TargetKills, curHp)
-
-                if Farm.KillCount >= Farm.TargetKills then
-                    SetCharCollision(true)
-                    Farm.State = "returning"
-                end
-            else
-                -- mob nao encontrado: re-TP na area
-                SafeTP(Farm.Zone.mobPos)
-                Farm.StatusText = ("Lv %d  |  Aguardando spawn... %d/%d"):format(
-                    lv, Farm.KillCount, Farm.TargetKills)
-                if Farm.KillCount >= Farm.TargetKills then
-                    SetCharCollision(true); Farm.State = "returning"
-                end
-                task.wait(2)
-            end
-
-        -- RETURNING: entrega quest e reinicia
-        elseif Farm.State == "returning" then
-            SetCharCollision(true)
-            Farm.StatusText = ("Lv %d  |  Entregando missao..."):format(lv)
-            SafeTP(Farm.Zone.islePos)
-            task.wait(1.0)
-            FinishQuest(Farm.Zone.questDesc)
-            task.wait(0.5)
-            FinishQuest(Farm.Zone.questDesc)
-            task.wait(0.5)
-            Farm.StatusText = ("Lv %d  |  Missao entregue! Reiniciando..."):format(lv)
-            task.wait(0.8)
-            Farm.State = "idle"
-        end
+        local origin = char.HumanoidRootPart.Position
+        local mob = FindMob(origin, 500)
+        if mob then AttackMob(mob) end
     end
 end)
 
 -- ============================================================
 --  FRUTAS
 -- ============================================================
-local FruitKW = {
-    "fruit","devil","gumgum","bombomb","chop","smoke","flame","ice","magnet",
+local FruitKW = {"fruit","devil","gumgum","chop","smoke","flame","ice","magnet",
     "light","dark","quake","phoenix","dragon","rubb","sand","diamond","paw",
-    "gravity","string","shadow","portal","control","venom","leopard",
-    "blizzard","gas","surge","rumble","barrier","soul","human","buddha",
-}
+    "gravity","string","shadow","portal","control","venom","leopard","blizzard",
+    "gas","surge","rumble","barrier","soul","human","buddha","love",}
 local function IsFruit(obj)
-    local n = obj.Name:lower()
-    for _, k in ipairs(FruitKW) do if n:find(k) then return true end end
+    local n=obj.Name:lower()
+    for _,k in ipairs(FruitKW) do if n:find(k) then return true end end
 end
 local function ScanFruits()
-    local out = {}
-    for _, obj in ipairs(workspace:GetDescendants()) do
+    local out={}
+    for _,obj in ipairs(workspace:GetDescendants()) do
         if (obj:IsA("Model") or obj:IsA("BasePart")) and IsFruit(obj) then
             local pos
-            if obj:IsA("Model") and obj.PrimaryPart then pos = obj.PrimaryPart.Position
-            elseif obj:IsA("BasePart") then pos = obj.Position end
+            if obj:IsA("Model") and obj.PrimaryPart then pos=obj.PrimaryPart.Position
+            elseif obj:IsA("BasePart") then pos=obj.Position end
             if pos then table.insert(out,{name=obj.Name,pos=pos}) end
         end
     end
     return out
 end
 local function TP(pos)
-    local char = LP.Character
+    local char=LP.Character
     if char and char:FindFirstChild("HumanoidRootPart") then
-        char.HumanoidRootPart.CFrame = CFrame.new(pos + Vector3.new(0,5,0))
+        char.HumanoidRootPart.CFrame=CFrame.new(pos+Vector3.new(0,5,0))
     end
 end
 local function TP_Player(name)
-    local t = Players:FindFirstChild(name)
+    local t=Players:FindFirstChild(name)
     if t and t.Character and t.Character:FindFirstChild("HumanoidRootPart") then
         TP(t.Character.HumanoidRootPart.Position)
     end
 end
 local function TP_NearestFruit()
-    local fruits = ScanFruits(); if #fruits == 0 then return end
-    local char = LP.Character; if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    table.sort(fruits, function(a,b)
+    local fruits=ScanFruits(); if #fruits==0 then return end
+    local char=LP.Character; if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    table.sort(fruits,function(a,b)
         return (char.HumanoidRootPart.Position-a.pos).Magnitude
              < (char.HumanoidRootPart.Position-b.pos).Magnitude
     end)
@@ -532,672 +487,333 @@ local function TP_NearestFruit()
 end
 
 -- ============================================================
---  LOCAIS DE TP
--- ============================================================
-local Locs = {
-    ["Starter Island"]  = Vector3.new(-2044,100,-4591),
-    ["Pirate Island"]   = Vector3.new(-681,64,-3449),
-    ["Soldier Island"]  = Vector3.new(990,28,-510),
-    ["Shark Island"]    = Vector3.new(1822,28,1492),
-    ["Chef Ship"]       = Vector3.new(-792,28,1242),
-    ["Snow Island"]     = Vector3.new(1622,28,-872),
-    ["Sand Kingdom"]    = Vector3.new(-3052,28,1978),
-    ["Sky Island"]      = Vector3.new(-2822,865,-1632),
-    ["Bubble Island"]   = Vector3.new(2552,28,-2058),
-    ["Lobby Island"]    = Vector3.new(-1892,28,-858),
-    ["Zombie Island"]   = Vector3.new(-2492,28,-312),
-    ["War Island"]      = Vector3.new(2552,28,-2058),
-    ["Fishland"]        = Vector3.new(-3102,882,-1922),
-}
-
--- ============================================================
 --  ESP
 -- ============================================================
-local Cfg = {
-    PlayerESP=false, FruitESP=false,
-    ShowDist=true, TracerLines=false, ESPRange=2000,
-    WHUrl="",
+local Cfg={
+    PlayerESP=false,FruitESP=false,ShowDist=true,
+    TracerLines=false,ESPRange=2000,WHUrl="",
     HideKey=Enum.KeyCode.LeftControl,
-    Col_Player=Color3.fromRGB(220,60,60),
-    Col_Fruit=Color3.fromRGB(60,220,100),
+    Col_P=Color3.fromRGB(220,60,60),
+    Col_F=Color3.fromRGB(60,210,100),
 }
-
-local function NewText(col,sz)
-    local t=Drawing.new("Text")
-    t.Color=col or Color3.new(1,1,1); t.Size=sz or 13
-    t.Center=true; t.Outline=true; t.Visible=false; return t
-end
-local function NewBox(col,filled)
-    local b=Drawing.new("Square")
-    b.Color=col or Color3.new(1,1,1); b.Thickness=1.5
-    b.Filled=filled or false; b.Visible=false; return b
-end
-local function NewLine(col)
-    local l=Drawing.new("Line")
-    l.Color=col or Color3.new(1,1,1); l.Thickness=1; l.Visible=false; return l
-end
-local function W2V(pos)
-    local sp=Camera:WorldToViewportPoint(pos)
-    return Vector2.new(sp.X,sp.Y),sp.Z,sp.Z>0
-end
-local function Dist(pos)
-    local c=LP.Character
-    if c and c:FindFirstChild("HumanoidRootPart") then
-        return math.floor((c.HumanoidRootPart.Position-pos).Magnitude)
-    end
-    return 0
-end
+local function NTxt(col,sz) local t=Drawing.new("Text"); t.Color=col or Color3.new(1,1,1); t.Size=sz or 13; t.Center=true; t.Outline=true; t.Visible=false; return t end
+local function NBox(col,f) local b=Drawing.new("Square"); b.Color=col or Color3.new(1,1,1); b.Thickness=1.5; b.Filled=f or false; b.Visible=false; return b end
+local function NLine(col) local l=Drawing.new("Line"); l.Color=col or Color3.new(1,1,1); l.Thickness=1; l.Visible=false; return l end
+local function W2V(pos) local sp=Camera:WorldToViewportPoint(pos); return Vector2.new(sp.X,sp.Y),sp.Z,sp.Z>0 end
+local function Dist(pos) local c=LP.Character; if c and c:FindFirstChild("HumanoidRootPart") then return math.floor((c.HumanoidRootPart.Position-pos).Magnitude) end; return 0 end
 
 -- ============================================================
---  GUI — REDESENHADA SEM EMOJIS
+--  GUI
 -- ============================================================
-local old = CoreGui:FindFirstChild("CHINAHUB5")
-if old then old:Destroy() end
-
-local SG = Instance.new("ScreenGui")
-SG.Name="CHINAHUB5"; SG.ResetOnSpawn=false
+local old=CoreGui:FindFirstChild("CHINAHUB6"); if old then old:Destroy() end
+local SG=Instance.new("ScreenGui")
+SG.Name="CHINAHUB6"; SG.ResetOnSpawn=false
 SG.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
 SG.IgnoreGuiInset=true; SG.Parent=CoreGui
 
--- paleta dark elegante
-local C = {
-    bg       = Color3.fromRGB(10,10,16),
-    sidebar  = Color3.fromRGB(14,14,22),
-    panel    = Color3.fromRGB(18,18,28),
-    card     = Color3.fromRGB(24,24,38),
-    cardHov  = Color3.fromRGB(30,30,48),
-    accent   = Color3.fromRGB(180,60,255),   -- roxo vibrante
-    accent2  = Color3.fromRGB(220,100,255),  -- roxo claro
-    accentRed= Color3.fromRGB(220,55,80),
-    green    = Color3.fromRGB(60,210,110),
-    red      = Color3.fromRGB(210,55,70),
-    text     = Color3.fromRGB(230,230,245),
-    textDim  = Color3.fromRGB(120,120,145),
-    border   = Color3.fromRGB(50,40,80),
-    sep      = Color3.fromRGB(30,25,50),
-    topbar   = Color3.fromRGB(12,12,20),
+local C={
+    bg    =Color3.fromRGB(8,8,14),
+    side  =Color3.fromRGB(11,11,19),
+    panel =Color3.fromRGB(15,15,24),
+    card  =Color3.fromRGB(20,20,33),
+    cardH =Color3.fromRGB(26,26,42),
+    acc   =Color3.fromRGB(165,55,255),
+    acc2  =Color3.fromRGB(210,100,255),
+    green =Color3.fromRGB(55,205,105),
+    red   =Color3.fromRGB(215,55,70),
+    text  =Color3.fromRGB(228,228,242),
+    dim   =Color3.fromRGB(115,115,140),
+    bord  =Color3.fromRGB(45,35,75),
+    sep   =Color3.fromRGB(28,22,48),
 }
 
-local function MkCorner(p,r) local c=Instance.new("UICorner",p); c.CornerRadius=UDim.new(0,r or 8); return c end
-local function MkStroke(p,col,t) local s=Instance.new("UIStroke",p); s.Color=col or C.border; s.Thickness=t or 1; return s end
-local function MkPad(p,l,r,t,b)
-    local pad=Instance.new("UIPadding",p)
-    pad.PaddingLeft=UDim.new(0,l or 0); pad.PaddingRight=UDim.new(0,r or 0)
-    pad.PaddingTop=UDim.new(0,t or 0);  pad.PaddingBottom=UDim.new(0,b or 0)
-end
-local function MkList(p,dir,pad,ha)
-    local l=Instance.new("UIListLayout",p)
-    l.FillDirection=dir or Enum.FillDirection.Vertical
-    l.Padding=UDim.new(0,pad or 6)
-    l.HorizontalAlignment=ha or Enum.HorizontalAlignment.Left
-    return l
-end
+local function Rnd(p,r) local c=Instance.new("UICorner",p); c.CornerRadius=UDim.new(0,r or 8) end
+local function Str(p,col,t) local s=Instance.new("UIStroke",p); s.Color=col or C.bord; s.Thickness=t or 1; return s end
+local function Pad(p,l,r,t,b) local x=Instance.new("UIPadding",p); x.PaddingLeft=UDim.new(0,l or 0); x.PaddingRight=UDim.new(0,r or 0); x.PaddingTop=UDim.new(0,t or 0); x.PaddingBottom=UDim.new(0,b or 0) end
+local function Lst(p,dir,sp,ha) local l=Instance.new("UIListLayout",p); l.FillDirection=dir or Enum.FillDirection.Vertical; l.Padding=UDim.new(0,sp or 6); l.HorizontalAlignment=ha or Enum.HorizontalAlignment.Left; return l end
 
--- janela principal
-local WIN = Instance.new("Frame",SG)
-WIN.Size=UDim2.new(0,680,0,510)
-WIN.Position=UDim2.new(0.5,-340,0.5,-255)
-WIN.BackgroundColor3=C.bg; WIN.BorderSizePixel=0
-MkCorner(WIN,12)
-local winStroke=MkStroke(WIN,C.border,1.5)
-
--- gradiente sutil na borda
-local winGrad=Instance.new("UIGradient",winStroke)
-winGrad.Color=ColorSequence.new{
-    ColorSequenceKeypoint.new(0,C.accent),
-    ColorSequenceKeypoint.new(0.5,C.border),
-    ColorSequenceKeypoint.new(1,C.accent),
-}
-winGrad.Rotation=90
+-- janela
+local WIN=Instance.new("Frame",SG)
+WIN.Size=UDim2.new(0,660,0,500); WIN.Position=UDim2.new(0.5,-330,0.5,-250)
+WIN.BackgroundColor3=C.bg; WIN.BorderSizePixel=0; Rnd(WIN,12)
+local ws=Str(WIN,C.bord,1.5)
+local wg=Instance.new("UIGradient",ws)
+wg.Color=ColorSequence.new{ColorSequenceKeypoint.new(0,C.acc),ColorSequenceKeypoint.new(0.5,C.bord),ColorSequenceKeypoint.new(1,C.acc)}
+wg.Rotation=90
 
 -- topbar
-local TopBar=Instance.new("Frame",WIN)
-TopBar.Size=UDim2.new(1,0,0,46)
-TopBar.BackgroundColor3=C.topbar; TopBar.BorderSizePixel=0
-MkCorner(TopBar,12)
+local Top=Instance.new("Frame",WIN)
+Top.Size=UDim2.new(1,0,0,44); Top.BackgroundColor3=C.side; Top.BorderSizePixel=0; Rnd(Top,12)
 
--- faixa colorida na topbar
-local TopAccent=Instance.new("Frame",TopBar)
-TopAccent.Size=UDim2.new(1,0,0,2)
-TopAccent.Position=UDim2.new(0,0,1,-2)
-TopAccent.BackgroundColor3=C.accent; TopAccent.BorderSizePixel=0
-local topGrad=Instance.new("UIGradient",TopAccent)
-topGrad.Color=ColorSequence.new{
-    ColorSequenceKeypoint.new(0,C.accent),
-    ColorSequenceKeypoint.new(0.5,C.accent2),
-    ColorSequenceKeypoint.new(1,C.accent),
-}
+local TopLine=Instance.new("Frame",Top)
+TopLine.Size=UDim2.new(1,0,0,2); TopLine.Position=UDim2.new(0,0,1,-2)
+TopLine.BackgroundColor3=C.acc; TopLine.BorderSizePixel=0
+local tlg=Instance.new("UIGradient",TopLine)
+tlg.Color=ColorSequence.new{ColorSequenceKeypoint.new(0,C.acc),ColorSequenceKeypoint.new(0.5,C.acc2),ColorSequenceKeypoint.new(1,C.acc)}
 
--- indicador lateral roxo
-local LeftBar=Instance.new("Frame",TopBar)
-LeftBar.Size=UDim2.new(0,3,0.6,0)
-LeftBar.Position=UDim2.new(0,12,0.2,0)
-LeftBar.BackgroundColor3=C.accent; LeftBar.BorderSizePixel=0
-MkCorner(LeftBar,2)
+local Dot=Instance.new("Frame",Top)
+Dot.Size=UDim2.new(0,3,0.5,0); Dot.Position=UDim2.new(0,12,0.25,0)
+Dot.BackgroundColor3=C.acc; Dot.BorderSizePixel=0; Rnd(Dot,2)
 
--- titulo
-local TitleLbl=Instance.new("TextLabel",TopBar)
-TitleLbl.Size=UDim2.new(1,-130,1,0)
-TitleLbl.Position=UDim2.new(0,24,0,0)
-TitleLbl.BackgroundTransparency=1
-TitleLbl.Text="CHINA HUB FREE"
-TitleLbl.TextColor3=C.text; TitleLbl.TextSize=14
-TitleLbl.Font=Enum.Font.GothamBold
-TitleLbl.TextXAlignment=Enum.TextXAlignment.Left
+local TLbl=Instance.new("TextLabel",Top)
+TLbl.Size=UDim2.new(1,-120,0,24); TLbl.Position=UDim2.new(0,22,0,6)
+TLbl.BackgroundTransparency=1; TLbl.Text="CHINA HUB FREE"
+TLbl.TextColor3=C.text; TLbl.TextSize=14; TLbl.Font=Enum.Font.GothamBold
+TLbl.TextXAlignment=Enum.TextXAlignment.Left
 
-local SubLbl=Instance.new("TextLabel",TopBar)
-SubLbl.Size=UDim2.new(1,-130,0,14)
-SubLbl.Position=UDim2.new(0,24,0,27)
-SubLbl.BackgroundTransparency=1
-SubLbl.Text="King Legacy  v5.0"
-SubLbl.TextColor3=C.accent2; SubLbl.TextSize=10
-SubLbl.Font=Enum.Font.Gotham
-SubLbl.TextXAlignment=Enum.TextXAlignment.Left
+local SLbl=Instance.new("TextLabel",Top)
+SLbl.Size=UDim2.new(1,-120,0,13); SLbl.Position=UDim2.new(0,22,0,28)
+SLbl.BackgroundTransparency=1; SLbl.Text="King Legacy  v6.0"
+SLbl.TextColor3=C.acc2; SLbl.TextSize=10; SLbl.Font=Enum.Font.Gotham
+SLbl.TextXAlignment=Enum.TextXAlignment.Left
 
--- botoes de janela
-local function WinBtn(label,col,off)
-    local b=Instance.new("TextButton",TopBar)
-    b.Size=UDim2.new(0,24,0,24); b.Position=UDim2.new(1,off,0.5,-12)
-    b.BackgroundColor3=col; b.Text=label; b.TextColor3=Color3.new(1,1,1)
-    b.TextSize=11; b.Font=Enum.Font.GothamBold; b.BorderSizePixel=0
-    MkCorner(b,5); return b
+local function WBtn(lbl,col,off)
+    local b=Instance.new("TextButton",Top)
+    b.Size=UDim2.new(0,22,0,22); b.Position=UDim2.new(1,off,0.5,-11)
+    b.BackgroundColor3=col; b.Text=lbl; b.TextColor3=Color3.new(1,1,1)
+    b.TextSize=10; b.Font=Enum.Font.GothamBold; b.BorderSizePixel=0; Rnd(b,5); return b
 end
-local CloseBtn = WinBtn("X", C.red,       -8)
-local MinBtn   = WinBtn("_", Color3.fromRGB(50,100,180), -38)
+local CBtn=WBtn("X",C.red,-8)
+local MBtn=WBtn("_",Color3.fromRGB(50,100,180),-36)
 
--- drag
-local dragging,dInput,dStart,dPos
-TopBar.InputBegan:Connect(function(inp)
-    if inp.UserInputType==Enum.UserInputType.MouseButton1 then
-        dragging=true; dStart=inp.Position; dPos=WIN.Position
-        inp.Changed:Connect(function()
-            if inp.UserInputState==Enum.UserInputState.End then dragging=false end
-        end)
+local drag,dI,dS,dP
+Top.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 then
+        drag=true; dS=i.Position; dP=WIN.Position
+        i.Changed:Connect(function() if i.UserInputState==Enum.UserInputState.End then drag=false end end)
     end
 end)
-TopBar.InputChanged:Connect(function(inp)
-    if inp.UserInputType==Enum.UserInputType.MouseMovement then dInput=inp end
+Top.InputChanged:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseMovement then dI=i end end)
+UserInputService.InputChanged:Connect(function(i)
+    if i==dI and drag then local d=i.Position-dS; WIN.Position=UDim2.new(dP.X.Scale,dP.X.Offset+d.X,dP.Y.Scale,dP.Y.Offset+d.Y) end
 end)
-UserInputService.InputChanged:Connect(function(inp)
-    if inp==dInput and dragging then
-        local d=inp.Position-dStart
-        WIN.Position=UDim2.new(dPos.X.Scale,dPos.X.Offset+d.X,dPos.Y.Scale,dPos.Y.Offset+d.Y)
-    end
-end)
-
-CloseBtn.MouseButton1Click:Connect(function()
-    Farm.Active=false; AutoAttack=false; SetCharCollision(true); SG:Destroy()
-end)
-local minimized=false
-MinBtn.MouseButton1Click:Connect(function()
-    minimized=not minimized
-    for _,c in ipairs(WIN:GetChildren()) do
-        if c~=TopBar then c.Visible=not minimized end
-    end
-    WIN.Size=minimized and UDim2.new(0,680,0,46) or UDim2.new(0,680,0,510)
-    MinBtn.Text=minimized and "+" or "_"
+CBtn.MouseButton1Click:Connect(function() Farm.Active=false; AutoAttack=false; SetCollision(true); SG:Destroy() end)
+local mini=false
+MBtn.MouseButton1Click:Connect(function()
+    mini=not mini
+    for _,c in ipairs(WIN:GetChildren()) do if c~=Top then c.Visible=not mini end end
+    WIN.Size=mini and UDim2.new(0,660,0,44) or UDim2.new(0,660,0,500)
+    MBtn.Text=mini and "+" or "_"
 end)
 
 -- layout
 local Layout=Instance.new("Frame",WIN)
-Layout.Position=UDim2.new(0,0,0,46); Layout.Size=UDim2.new(1,0,1,-46)
+Layout.Position=UDim2.new(0,0,0,44); Layout.Size=UDim2.new(1,0,1,-44)
 Layout.BackgroundTransparency=1
 
 -- sidebar
-local Sidebar=Instance.new("Frame",Layout)
-Sidebar.Size=UDim2.new(0,160,1,0); Sidebar.BackgroundColor3=C.sidebar
-Sidebar.BorderSizePixel=0
-MkCorner(Sidebar,8)
-local sbList=MkList(Sidebar,Enum.FillDirection.Vertical,0,Enum.HorizontalAlignment.Left)
-MkPad(Sidebar,0,0,8,8)
+local SB=Instance.new("Frame",Layout)
+SB.Size=UDim2.new(0,150,1,0); SB.BackgroundColor3=C.side; SB.BorderSizePixel=0
 
--- card de usuario no topo da sidebar
-local UserCard=Instance.new("Frame",Sidebar)
-UserCard.Size=UDim2.new(1,0,0,62); UserCard.BackgroundColor3=C.card
-UserCard.BorderSizePixel=0; MkCorner(UserCard,0)
--- faixa accent no user card
-local UCBar=Instance.new("Frame",UserCard)
-UCBar.Size=UDim2.new(0,3,0.7,0); UCBar.Position=UDim2.new(0,0,0.15,0)
-UCBar.BackgroundColor3=C.accent; UCBar.BorderSizePixel=0
+local sbList=Lst(SB,Enum.FillDirection.Vertical,0)
+Pad(SB,0,0,8,8)
 
-local UCName=Instance.new("TextLabel",UserCard)
-UCName.Size=UDim2.new(1,-16,0,20); UCName.Position=UDim2.new(0,12,0,10)
-UCName.BackgroundTransparency=1; UCName.Text=LP.DisplayName
-UCName.TextColor3=C.text; UCName.TextSize=12; UCName.Font=Enum.Font.GothamBold
-UCName.TextXAlignment=Enum.TextXAlignment.Left; UCName.LayoutOrder=0
+-- user card
+local UC=Instance.new("Frame",SB)
+UC.Size=UDim2.new(1,0,0,58); UC.BackgroundColor3=C.card; UC.BorderSizePixel=0; UC.LayoutOrder=0
+local ucBar=Instance.new("Frame",UC); ucBar.Size=UDim2.new(0,3,0.6,0); ucBar.Position=UDim2.new(0,0,0.2,0); ucBar.BackgroundColor3=C.acc; ucBar.BorderSizePixel=0
+local ucN=Instance.new("TextLabel",UC); ucN.Size=UDim2.new(1,-12,0,20); ucN.Position=UDim2.new(0,10,0,8); ucN.BackgroundTransparency=1; ucN.Text=LP.DisplayName; ucN.TextColor3=C.text; ucN.TextSize=12; ucN.Font=Enum.Font.GothamBold; ucN.TextXAlignment=Enum.TextXAlignment.Left
+local ucLv=Instance.new("TextLabel",UC); ucLv.Size=UDim2.new(1,-12,0,14); ucLv.Position=UDim2.new(0,10,0,32); ucLv.BackgroundTransparency=1; ucLv.TextColor3=C.acc2; ucLv.TextSize=10; ucLv.Font=Enum.Font.Gotham; ucLv.TextXAlignment=Enum.TextXAlignment.Left
+task.spawn(function() while SG.Parent do task.wait(2); ucLv.Text="Level  "..GetLevel() end end)
 
-local UCLv=Instance.new("TextLabel",UserCard)
-UCLv.Size=UDim2.new(1,-16,0,15); UCLv.Position=UDim2.new(0,12,0,34)
-UCLv.BackgroundTransparency=1; UCLv.TextColor3=C.accent2
-UCLv.TextSize=10; UCLv.Font=Enum.Font.Gotham; UCLv.TextXAlignment=Enum.TextXAlignment.Left
-task.spawn(function()
-    while SG.Parent do task.wait(2); UCLv.Text="Level  "..GetLevel() end
-end)
-
--- divisor
-local SBDiv=Instance.new("Frame",Sidebar)
-SBDiv.Size=UDim2.new(1,0,0,1); SBDiv.BackgroundColor3=C.sep
-SBDiv.BorderSizePixel=0; SBDiv.LayoutOrder=1
+local sdiv=Instance.new("Frame",SB); sdiv.Size=UDim2.new(1,0,0,1); sdiv.BackgroundColor3=C.sep; sdiv.BorderSizePixel=0; sdiv.LayoutOrder=1
 
 -- conteudo
-local Content=Instance.new("Frame",Layout)
-Content.Position=UDim2.new(0,160,0,0); Content.Size=UDim2.new(1,-160,1,0)
-Content.BackgroundColor3=C.panel; Content.BorderSizePixel=0
+local Con=Instance.new("Frame",Layout)
+Con.Position=UDim2.new(0,150,0,0); Con.Size=UDim2.new(1,-150,1,0)
+Con.BackgroundColor3=C.panel; Con.BorderSizePixel=0
 
-local CScroll=Instance.new("ScrollingFrame",Content)
-CScroll.Size=UDim2.new(1,0,1,0); CScroll.BackgroundTransparency=1
-CScroll.ScrollBarThickness=3; CScroll.ScrollBarImageColor3=C.accent
-CScroll.CanvasSize=UDim2.new(0,0,0,0); CScroll.AutomaticCanvasSize=Enum.AutomaticSize.Y
-MkPad(CScroll,14,14,12,12)
-MkList(CScroll,Enum.FillDirection.Vertical,8)
+local CS=Instance.new("ScrollingFrame",Con)
+CS.Size=UDim2.new(1,0,1,0); CS.BackgroundTransparency=1
+CS.ScrollBarThickness=3; CS.ScrollBarImageColor3=C.acc
+CS.CanvasSize=UDim2.new(0,0,0,0); CS.AutomaticCanvasSize=Enum.AutomaticSize.Y
+Pad(CS,12,12,10,10); Lst(CS,Enum.FillDirection.Vertical,8)
 
-local Pages, TabBtns = {}, {}
-
-local function MakePage(id)
-    local pg=Instance.new("Frame",CScroll)
+local Pages,TabBtns={},{}
+local function MkPage(id)
+    local pg=Instance.new("Frame",CS)
     pg.Size=UDim2.new(1,0,0,0); pg.AutomaticSize=Enum.AutomaticSize.Y
     pg.BackgroundTransparency=1; pg.Visible=false
-    MkList(pg,Enum.FillDirection.Vertical,6)
+    Lst(pg,Enum.FillDirection.Vertical,6)
     Pages[id]=pg; return pg
 end
-
-local function SwitchTab(id)
-    for k,pg in pairs(Pages) do
-        pg.Visible=false
-        if TabBtns[k] then
-            TabBtns[k].BackgroundTransparency=1
-            local l=TabBtns[k]:FindFirstChildOfClass("TextLabel")
-            if l then l.TextColor3=C.textDim end
-            local d=TabBtns[k]:FindFirstChild("AD")
-            if d then d.Visible=false end
+local function Switch(id)
+    for k,pg in pairs(Pages) do pg.Visible=false
+        if TabBtns[k] then TabBtns[k].BackgroundTransparency=1
+            local l=TabBtns[k]:FindFirstChildOfClass("TextLabel"); if l then l.TextColor3=C.dim end
+            local d=TabBtns[k]:FindFirstChild("AD"); if d then d.Visible=false end
         end
     end
     if Pages[id] then Pages[id].Visible=true end
-    if TabBtns[id] then
-        TabBtns[id].BackgroundColor3=C.cardHov
-        TabBtns[id].BackgroundTransparency=0
-        local l=TabBtns[id]:FindFirstChildOfClass("TextLabel")
-        if l then l.TextColor3=C.text end
-        local d=TabBtns[id]:FindFirstChild("AD")
-        if d then d.Visible=true end
+    if TabBtns[id] then TabBtns[id].BackgroundColor3=C.cardH; TabBtns[id].BackgroundTransparency=0
+        local l=TabBtns[id]:FindFirstChildOfClass("TextLabel"); if l then l.TextColor3=C.text end
+        local d=TabBtns[id]:FindFirstChild("AD"); if d then d.Visible=true end
     end
-    CScroll.CanvasPosition=Vector2.new(0,0)
+    CS.CanvasPosition=Vector2.new(0,0)
 end
 
-local TabDefs = {
-    {label="HOME",    order=1},
-    {label="FARM",    order=2},
-    {label="ESP",     order=3},
-    {label="TELEPORT",order=4},
-    {label="ILHAS",   order=5},
-    {label="MISC",    order=6},
-    {label="WEBHOOK", order=7},
-}
-
-for _,def in ipairs(TabDefs) do
-    MakePage(def.label)
-    local btn=Instance.new("TextButton",Sidebar)
-    btn.Name=def.label; btn.Size=UDim2.new(1,0,0,38)
-    btn.BackgroundTransparency=1; btn.Text=""; btn.LayoutOrder=def.order+2
-    -- faixa ativa
-    local ad=Instance.new("Frame",btn)
-    ad.Name="AD"; ad.Size=UDim2.new(0,3,0.55,0); ad.Position=UDim2.new(0,0,0.225,0)
-    ad.BackgroundColor3=C.accent; ad.BorderSizePixel=0; ad.Visible=false; MkCorner(ad,2)
-    -- label
+local Tabs={"FARM","ESP","TELEPORT","MISC","WEBHOOK"}
+for i,name in ipairs(Tabs) do
+    MkPage(name)
+    local btn=Instance.new("TextButton",SB)
+    btn.Name=name; btn.Size=UDim2.new(1,0,0,36)
+    btn.BackgroundTransparency=1; btn.Text=""; btn.LayoutOrder=i+2
+    local ad=Instance.new("Frame",btn); ad.Name="AD"
+    ad.Size=UDim2.new(0,3,0.5,0); ad.Position=UDim2.new(0,0,0.25,0)
+    ad.BackgroundColor3=C.acc; ad.BorderSizePixel=0; ad.Visible=false; Rnd(ad,2)
     local lbl=Instance.new("TextLabel",btn)
-    lbl.Size=UDim2.new(1,0,1,0); lbl.Position=UDim2.new(0,14,0,0)
-    lbl.BackgroundTransparency=1; lbl.Text=def.label
-    lbl.TextColor3=C.textDim; lbl.TextSize=11; lbl.Font=Enum.Font.GothamBold
-    lbl.TextXAlignment=Enum.TextXAlignment.Left
-    TabBtns[def.label]=btn
-    btn.MouseButton1Click:Connect(function() SwitchTab(def.label) end)
+    lbl.Size=UDim2.new(1,0,1,0); lbl.Position=UDim2.new(0,12,0,0)
+    lbl.BackgroundTransparency=1; lbl.Text=name; lbl.TextColor3=C.dim
+    lbl.TextSize=11; lbl.Font=Enum.Font.GothamBold; lbl.TextXAlignment=Enum.TextXAlignment.Left
+    TabBtns[name]=btn
+    btn.MouseButton1Click:Connect(function() Switch(name) end)
 end
 
--- ============================================================
---  UI HELPERS
--- ============================================================
-local function Section(parent, text)
-    local row=Instance.new("Frame",parent)
-    row.Size=UDim2.new(1,0,0,22); row.BackgroundTransparency=1
-    local line=Instance.new("Frame",row)
-    line.Size=UDim2.new(1,0,0,1); line.Position=UDim2.new(0,0,1,-1)
-    line.BackgroundColor3=C.sep; line.BorderSizePixel=0
-    local lbl=Instance.new("TextLabel",row)
-    lbl.Size=UDim2.new(1,0,1,-2); lbl.BackgroundTransparency=1
-    lbl.Text=text; lbl.TextColor3=C.accent2
-    lbl.TextSize=10; lbl.Font=Enum.Font.GothamBold
-    lbl.TextXAlignment=Enum.TextXAlignment.Left
+-- helpers UI
+local function Sec(p,t)
+    local row=Instance.new("Frame",p); row.Size=UDim2.new(1,0,0,22); row.BackgroundTransparency=1
+    local line=Instance.new("Frame",row); line.Size=UDim2.new(1,0,0,1); line.Position=UDim2.new(0,0,1,-1); line.BackgroundColor3=C.sep; line.BorderSizePixel=0
+    local lbl=Instance.new("TextLabel",row); lbl.Size=UDim2.new(1,0,1,-2); lbl.BackgroundTransparency=1; lbl.Text=t; lbl.TextColor3=C.acc2; lbl.TextSize=10; lbl.Font=Enum.Font.GothamBold; lbl.TextXAlignment=Enum.TextXAlignment.Left
 end
-
-local function Toggle(parent, text, default, cb)
-    local row=Instance.new("Frame",parent)
-    row.Size=UDim2.new(1,0,0,38); row.BackgroundColor3=C.card; row.BorderSizePixel=0
-    MkCorner(row,6)
-    local lbl=Instance.new("TextLabel",row)
-    lbl.Size=UDim2.new(1,-68,1,0); lbl.Position=UDim2.new(0,12,0,0)
-    lbl.BackgroundTransparency=1; lbl.Text=text; lbl.TextColor3=C.text
-    lbl.TextSize=12; lbl.Font=Enum.Font.Gotham; lbl.TextXAlignment=Enum.TextXAlignment.Left
-    local pill=Instance.new("TextButton",row)
-    pill.Size=UDim2.new(0,46,0,22); pill.Position=UDim2.new(1,-56,0.5,-11)
-    pill.Text=""; pill.BorderSizePixel=0
-    local state=default or false
-    pill.BackgroundColor3=state and C.green or Color3.fromRGB(40,40,60)
-    MkCorner(pill,11)
-    local thumb=Instance.new("Frame",pill)
-    thumb.Size=UDim2.new(0,16,0,16)
-    thumb.Position=state and UDim2.new(1,-20,0.5,-8) or UDim2.new(0,4,0.5,-8)
-    thumb.BackgroundColor3=Color3.new(1,1,1); thumb.BorderSizePixel=0; MkCorner(thumb,8)
-    local function Set(v)
-        state=v
-        TweenService:Create(pill,TweenInfo.new(0.15),{BackgroundColor3=v and C.green or Color3.fromRGB(40,40,60)}):Play()
-        TweenService:Create(thumb,TweenInfo.new(0.15),{Position=v and UDim2.new(1,-20,0.5,-8) or UDim2.new(0,4,0.5,-8)}):Play()
+local function Tog(p,t,def,cb)
+    local row=Instance.new("Frame",p); row.Size=UDim2.new(1,0,0,38); row.BackgroundColor3=C.card; row.BorderSizePixel=0; Rnd(row,6)
+    local lbl=Instance.new("TextLabel",row); lbl.Size=UDim2.new(1,-68,1,0); lbl.Position=UDim2.new(0,12,0,0); lbl.BackgroundTransparency=1; lbl.Text=t; lbl.TextColor3=C.text; lbl.TextSize=12; lbl.Font=Enum.Font.Gotham; lbl.TextXAlignment=Enum.TextXAlignment.Left
+    local pill=Instance.new("TextButton",row); pill.Size=UDim2.new(0,46,0,22); pill.Position=UDim2.new(1,-56,0.5,-11); pill.Text=""; pill.BorderSizePixel=0
+    local st=def or false; pill.BackgroundColor3=st and C.green or Color3.fromRGB(38,38,58); Rnd(pill,11)
+    local th=Instance.new("Frame",pill); th.Size=UDim2.new(0,16,0,16); th.Position=st and UDim2.new(1,-20,0.5,-8) or UDim2.new(0,4,0.5,-8); th.BackgroundColor3=Color3.new(1,1,1); th.BorderSizePixel=0; Rnd(th,8)
+    local function Set(v) st=v
+        TweenService:Create(pill,TweenInfo.new(0.15),{BackgroundColor3=v and C.green or Color3.fromRGB(38,38,58)}):Play()
+        TweenService:Create(th,TweenInfo.new(0.15),{Position=v and UDim2.new(1,-20,0.5,-8) or UDim2.new(0,4,0.5,-8)}):Play()
         if cb then cb(v) end
     end
-    pill.MouseButton1Click:Connect(function() Set(not state) end)
-    return Set
+    pill.MouseButton1Click:Connect(function() Set(not st) end); return Set
 end
-
-local function Button(parent, text, cb, accent)
-    local b=Instance.new("TextButton",parent)
-    b.Size=UDim2.new(1,0,0,36)
-    b.BackgroundColor3=accent and C.accent or C.card
-    b.Text=text; b.TextColor3=C.text; b.TextSize=12
-    b.Font=Enum.Font.GothamBold; b.BorderSizePixel=0
-    MkCorner(b,6)
-    if not accent then MkStroke(b,C.border,1) end
+local function Btn(p,t,cb,acc)
+    local b=Instance.new("TextButton",p); b.Size=UDim2.new(1,0,0,36)
+    b.BackgroundColor3=acc and C.acc or C.card; b.Text=t; b.TextColor3=C.text
+    b.TextSize=12; b.Font=Enum.Font.GothamBold; b.BorderSizePixel=0; Rnd(b,6)
+    if not acc then Str(b,C.bord,1) end
     b.MouseButton1Click:Connect(function()
-        TweenService:Create(b,TweenInfo.new(0.08),{BackgroundColor3=accent and C.accent2 or C.cardHov}):Play()
-        task.delay(0.15,function()
-            if b and b.Parent then
-                TweenService:Create(b,TweenInfo.new(0.08),{BackgroundColor3=accent and C.accent or C.card}):Play()
-            end
-        end)
+        TweenService:Create(b,TweenInfo.new(0.08),{BackgroundColor3=acc and C.acc2 or C.cardH}):Play()
+        task.delay(0.14,function() if b and b.Parent then TweenService:Create(b,TweenInfo.new(0.08),{BackgroundColor3=acc and C.acc or C.card}):Play() end end)
         if cb then cb() end
-    end)
-    return b
+    end); return b
 end
-
-local function Input(parent, hint, cb)
-    local box=Instance.new("TextBox",parent)
-    box.Size=UDim2.new(1,0,0,32); box.BackgroundColor3=C.card
-    box.Text=""; box.PlaceholderText=hint; box.PlaceholderColor3=C.textDim
-    box.TextColor3=C.text; box.TextSize=11; box.Font=Enum.Font.Gotham
-    box.BorderSizePixel=0; box.ClearTextOnFocus=false
-    MkCorner(box,6); MkStroke(box,C.border,1); MkPad(box,10,10,0,0)
-    box.FocusLost:Connect(function() if cb then cb(box.Text) end end)
-    return box
+local function Inp(p,hint,cb)
+    local b=Instance.new("TextBox",p); b.Size=UDim2.new(1,0,0,32); b.BackgroundColor3=C.card
+    b.Text=""; b.PlaceholderText=hint; b.PlaceholderColor3=C.dim; b.TextColor3=C.text
+    b.TextSize=11; b.Font=Enum.Font.Gotham; b.BorderSizePixel=0; b.ClearTextOnFocus=false
+    Rnd(b,6); Str(b,C.bord,1); Pad(b,10,10,0,0)
+    b.FocusLost:Connect(function() if cb then cb(b.Text) end end); return b
 end
-
-local function Label(parent, text, col)
-    local l=Instance.new("TextLabel",parent)
-    l.Size=UDim2.new(1,0,0,16); l.BackgroundTransparency=1; l.Text=text
-    l.TextColor3=col or C.textDim; l.TextSize=11; l.Font=Enum.Font.Gotham
+local function Lbl(p,t,col)
+    local l=Instance.new("TextLabel",p); l.Size=UDim2.new(1,0,0,16); l.BackgroundTransparency=1
+    l.Text=t; l.TextColor3=col or C.dim; l.TextSize=11; l.Font=Enum.Font.Gotham
     l.TextXAlignment=Enum.TextXAlignment.Left
 end
 
 -- ============================================================
---  HOME
--- ============================================================
-do
-    local pg=Pages["HOME"]
-
-    -- banner
-    local banner=Instance.new("Frame",pg)
-    banner.Size=UDim2.new(1,0,0,96); banner.BackgroundColor3=C.card
-    banner.BorderSizePixel=0; MkCorner(banner,10)
-    MkStroke(banner,C.accent,1.5)
-    local bg=Instance.new("UIGradient",banner)
-    bg.Color=ColorSequence.new{
-        ColorSequenceKeypoint.new(0,Color3.fromRGB(50,10,80)),
-        ColorSequenceKeypoint.new(1,Color3.fromRGB(10,10,22)),
-    }
-    bg.Rotation=140
-    -- barra decorativa
-    local bLine=Instance.new("Frame",banner)
-    bLine.Size=UDim2.new(0,3,0.6,0); bLine.Position=UDim2.new(0,14,0.2,0)
-    bLine.BackgroundColor3=C.accent2; bLine.BorderSizePixel=0; MkCorner(bLine,2)
-
-    local bT=Instance.new("TextLabel",banner)
-    bT.Size=UDim2.new(1,-30,0,30); bT.Position=UDim2.new(0,24,0,14)
-    bT.BackgroundTransparency=1; bT.Text="CHINA HUB FREE"
-    bT.TextColor3=Color3.new(1,1,1); bT.TextSize=20; bT.Font=Enum.Font.GothamBold
-    bT.TextXAlignment=Enum.TextXAlignment.Left
-
-    local bS=Instance.new("TextLabel",banner)
-    bS.Size=UDim2.new(1,-30,0,16); bS.Position=UDim2.new(0,24,0,46)
-    bS.BackgroundTransparency=1; bS.Text="King Legacy  |  Build 5.0  |  Sea 1"
-    bS.TextColor3=C.textDim; bS.TextSize=11; bS.Font=Enum.Font.Gotham
-    bS.TextXAlignment=Enum.TextXAlignment.Left
-
-    local bS2=Instance.new("TextLabel",banner)
-    bS2.Size=UDim2.new(1,-30,0,14); bS2.Position=UDim2.new(0,24,0,66)
-    bS2.BackgroundTransparency=1; bS2.Text="workspace.Monster  |  RemoteFunction Quest"
-    bS2.TextColor3=C.accent2; bS2.TextSize=10; bS2.Font=Enum.Font.Gotham
-    bS2.TextXAlignment=Enum.TextXAlignment.Left
-
-    -- cards de info
-    local infoRow=Instance.new("Frame",pg)
-    infoRow.Size=UDim2.new(1,0,0,62); infoRow.BackgroundTransparency=1
-    local iList=MkList(infoRow,Enum.FillDirection.Horizontal,8,Enum.HorizontalAlignment.Left)
-
-    local function InfoCard(label,val,col)
-        local c2=Instance.new("Frame",infoRow)
-        c2.Size=UDim2.new(0,138,1,0); c2.BackgroundColor3=C.card
-        c2.BorderSizePixel=0; MkCorner(c2,8); MkStroke(c2,C.sep,1)
-        -- faixa top
-        local topLine=Instance.new("Frame",c2)
-        topLine.Size=UDim2.new(1,0,0,2); topLine.BackgroundColor3=col or C.accent
-        topLine.BorderSizePixel=0; MkCorner(topLine,2)
-        local vl=Instance.new("TextLabel",c2)
-        vl.Size=UDim2.new(1,0,0,26); vl.Position=UDim2.new(0,0,0,8)
-        vl.BackgroundTransparency=1; vl.Text=val
-        vl.TextColor3=col or C.accent2; vl.TextSize=18
-        vl.Font=Enum.Font.GothamBold; vl.TextXAlignment=Enum.TextXAlignment.Center
-        local tl=Instance.new("TextLabel",c2)
-        tl.Size=UDim2.new(1,0,0,14); tl.Position=UDim2.new(0,0,0,38)
-        tl.BackgroundTransparency=1; tl.Text=label; tl.TextColor3=C.textDim
-        tl.TextSize=10; tl.Font=Enum.Font.Gotham; tl.TextXAlignment=Enum.TextXAlignment.Center
-        return vl
-    end
-
-    local lvCard    = InfoCard("LEVEL",   tostring(GetLevel()), C.accent2)
-    local farmCard  = InfoCard("FARM",    "OFF",   C.red)
-    local styleCard = InfoCard("ESTILO",  "Melee", C.green)
-
-    task.spawn(function()
-        while SG.Parent do task.wait(1.5)
-            lvCard.Text    = tostring(GetLevel())
-            farmCard.Text  = Farm.Active and "ON" or "OFF"
-            farmCard.TextColor3 = Farm.Active and C.green or C.red
-            styleCard.Text = Farm.Style:sub(1,1):upper()..Farm.Style:sub(2)
-        end
-    end)
-
-    Section(pg,"SOBRE")
-    Label(pg,"  Mob-Lock Aereo: personagem fica acima do NPC.")
-    Label(pg,"  Quest aceita via RemoteFunction (metodo real do KL).")
-    Label(pg,"  Mobs buscados em workspace.Monster.Mon e .Boss.")
-    Label(pg,"  Coordenadas reais: Starter (-2044,100,-4591) | Pirate (-681,64,-3449).")
-    Label(pg,"  Calibre as demais zonas com o botao na aba Farm.")
-    Label(pg,"  Tecla LeftCtrl: ocultar/mostrar.")
-end
-
--- ============================================================
---  FARM
+--  FARM PAGE
 -- ============================================================
 do
     local pg=Pages["FARM"]
 
-    -- status card com borda animada
-    local statusF=Instance.new("Frame",pg)
-    statusF.Size=UDim2.new(1,0,0,48); statusF.BackgroundColor3=Color3.fromRGB(12,22,16)
-    statusF.BorderSizePixel=0; MkCorner(statusF,8)
-    MkStroke(statusF,Color3.fromRGB(30,80,45),1)
+    -- status
+    local sf=Instance.new("Frame",pg)
+    sf.Size=UDim2.new(1,0,0,48); sf.BackgroundColor3=Color3.fromRGB(10,20,14)
+    sf.BorderSizePixel=0; Rnd(sf,8); Str(sf,Color3.fromRGB(28,78,44),1)
+    local sd=Instance.new("Frame",sf); sd.Size=UDim2.new(0,8,0,8); sd.Position=UDim2.new(0,12,0.5,-4); sd.BackgroundColor3=C.red; sd.BorderSizePixel=0; Rnd(sd,4)
+    local sl=Instance.new("TextLabel",sf); sl.Size=UDim2.new(1,-30,1,0); sl.Position=UDim2.new(0,26,0,0); sl.BackgroundTransparency=1; sl.Text="Inativo"; sl.TextColor3=C.green; sl.TextSize=11; sl.Font=Enum.Font.GothamBold; sl.TextXAlignment=Enum.TextXAlignment.Left
+    task.spawn(function() while SG.Parent do task.wait(0.7)
+        sl.Text=Farm.Active and Farm.StatusText or "Inativo"
+        sd.BackgroundColor3=Farm.Active and C.green or C.red
+    end end)
 
-    local sDot=Instance.new("Frame",statusF)
-    sDot.Size=UDim2.new(0,8,0,8); sDot.Position=UDim2.new(0,12,0.5,-4)
-    sDot.BackgroundColor3=C.red; sDot.BorderSizePixel=0; MkCorner(sDot,4)
-
-    local sLbl=Instance.new("TextLabel",statusF)
-    sLbl.Size=UDim2.new(1,-30,1,0); sLbl.Position=UDim2.new(0,26,0,0)
-    sLbl.BackgroundTransparency=1; sLbl.Text="Estado: Inativo"
-    sLbl.TextColor3=C.green; sLbl.TextSize=11; sLbl.Font=Enum.Font.GothamBold
-    sLbl.TextXAlignment=Enum.TextXAlignment.Left
-
-    task.spawn(function()
-        while SG.Parent do task.wait(0.7)
-            sLbl.Text = Farm.Active and Farm.StatusText or "Estado: Inativo"
-            sDot.BackgroundColor3 = Farm.Active and C.green or C.red
-        end
+    Sec(pg,"AUTO FARM")
+    Tog(pg,"Auto Farm (Quest + Mob-Lock Aereo)",false,function(v)
+        Farm.Active=v; if not v then Farm.State="idle"; SetCollision(true) end
     end)
+    Tog(pg,"Aceitar Quest automaticamente",true,function(v) Farm.UseQuest=v end)
 
-    Section(pg,"AUTO FARM")
-    Toggle(pg,"Auto Farm Level (Quest + Mob-Lock)",false,function(v)
-        Farm.Active=v
-        if not v then Farm.State="idle"; SetCharCollision(true) end
-    end)
-
-    -- seletor de estilo
-    Section(pg,"ESTILO DE LUTA")
-
-    local styleRow=Instance.new("Frame",pg)
-    styleRow.Size=UDim2.new(1,0,0,44); styleRow.BackgroundTransparency=1
-    MkList(styleRow,Enum.FillDirection.Horizontal,6,Enum.HorizontalAlignment.Left)
-
+    -- estilo
+    Sec(pg,"ESTILO DE LUTA")
+    local sRow=Instance.new("Frame",pg); sRow.Size=UDim2.new(1,0,0,40); sRow.BackgroundTransparency=1
+    Lst(sRow,Enum.FillDirection.Horizontal,6,Enum.HorizontalAlignment.Left)
     local sBtns={}
-    local styles={
-        {key="melee",label="MELEE"},
-        {key="sword",label="SWORD"},
-        {key="fruit",label="FRUIT"},
-    }
-
-    local function SetStyle(key)
+    local stList={{"melee","MELEE"},{"sword","SWORD"},{"fruit","FRUIT"}}
+    local function SetSt(key)
         Farm.Style=key
-        for _,sb in ipairs(sBtns) do
-            local active=sb.key==key
-            TweenService:Create(sb.btn,TweenInfo.new(0.15),{
-                BackgroundColor3=active and C.accent or C.card
-            }):Play()
-            sb.lbl.TextColor3=active and Color3.new(1,1,1) or C.textDim
-            sb.lbl.Font=active and Enum.Font.GothamBold or Enum.Font.Gotham
+        for _,sb in ipairs(sBtns) do local a=sb[1]==key
+            TweenService:Create(sb[2],TweenInfo.new(0.14),{BackgroundColor3=a and C.acc or C.card}):Play()
+            sb[3].TextColor3=a and Color3.new(1,1,1) or C.dim
+            sb[3].Font=a and Enum.Font.GothamBold or Enum.Font.Gotham
         end
     end
-
-    for _,st in ipairs(styles) do
-        local btn=Instance.new("TextButton",styleRow)
-        btn.Size=UDim2.new(0,128,1,0); btn.Text=""; btn.BorderSizePixel=0
-        btn.BackgroundColor3=st.key=="melee" and C.accent or C.card
-        MkCorner(btn,6)
-        if st.key~="melee" then MkStroke(btn,C.border,1) end
-        local lbl=Instance.new("TextLabel",btn)
-        lbl.Size=UDim2.new(1,0,1,0); lbl.BackgroundTransparency=1
-        lbl.Text=st.label; lbl.TextSize=12
-        lbl.Font=st.key=="melee" and Enum.Font.GothamBold or Enum.Font.Gotham
-        lbl.TextColor3=st.key=="melee" and Color3.new(1,1,1) or C.textDim
-        lbl.TextXAlignment=Enum.TextXAlignment.Center
-        table.insert(sBtns,{key=st.key,btn=btn,lbl=lbl})
-        btn.MouseButton1Click:Connect(function() SetStyle(st.key) end)
+    for _,st in ipairs(stList) do
+        local b=Instance.new("TextButton",sRow); b.Size=UDim2.new(0,120,1,0); b.Text=""; b.BorderSizePixel=0
+        b.BackgroundColor3=st[1]=="melee" and C.acc or C.card; Rnd(b,6)
+        if st[1]~="melee" then Str(b,C.bord,1) end
+        local l=Instance.new("TextLabel",b); l.Size=UDim2.new(1,0,1,0); l.BackgroundTransparency=1
+        l.Text=st[2]; l.TextSize=12; l.TextXAlignment=Enum.TextXAlignment.Center
+        l.Font=st[1]=="melee" and Enum.Font.GothamBold or Enum.Font.Gotham
+        l.TextColor3=st[1]=="melee" and Color3.new(1,1,1) or C.dim
+        table.insert(sBtns,{st[1],b,l}); b.MouseButton1Click:Connect(function() SetSt(st[1]) end)
     end
 
-    local styleDesc=Instance.new("TextLabel",pg)
-    styleDesc.Size=UDim2.new(1,0,0,14); styleDesc.BackgroundTransparency=1
-    styleDesc.TextColor3=C.textDim; styleDesc.TextSize=10; styleDesc.Font=Enum.Font.Gotham
-    styleDesc.TextXAlignment=Enum.TextXAlignment.Left
-    local sDescs={
-        melee="  Melee: M1 de cima (hover aereo)",
-        sword="  Sword: equipa espada + M1 de cima",
-        fruit="  Fruit: tecla Z/X de cima",
-    }
-    task.spawn(function()
-        while SG.Parent do task.wait(0.4); styleDesc.Text=sDescs[Farm.Style] or "" end
-    end)
+    -- config
+    Sec(pg,"CONFIGURACAO")
+    Lbl(pg,"  Altura hover acima do mob (studs):")
+    local hI=Inp(pg,"5",function(v) local n=tonumber(v); if n and n>0 then Farm.HoverY=n end end); hI.Text="5"
+    Lbl(pg,"  Mobs por ciclo:")
+    local kI=Inp(pg,"10",function(v) local n=tonumber(v); if n and n>0 then Farm.TargetKills=math.floor(n) end end); kI.Text="10"
 
-    Section(pg,"CONFIGURACOES")
-
-    Label(pg,"  Altura acima do mob (studs, padrao: 5):")
-    local hIn=Input(pg,"5",function(v)
-        local n=tonumber(v); if n and n>0 then Farm.HoverY=n end
-    end); hIn.Text="5"
-
-    Label(pg,"  Mobs para matar por ciclo (padrao: 10):")
-    local kIn=Input(pg,"10",function(v)
-        local n=tonumber(v); if n and n>0 then Farm.TargetKills=math.floor(n) end
-    end); kIn.Text="10"
-
-    Section(pg,"CALIBRAR ZONAS")
-    Label(pg,"  Va ate o ponto correto no jogo e clique calibrar.")
-
+    -- calibrar
+    Sec(pg,"CALIBRAR ZONAS")
+    Lbl(pg,"  Va ate o ponto no jogo e clique calibrar.")
     local selIdx=1
-    local selLbl=Instance.new("TextLabel",pg)
-    selLbl.Size=UDim2.new(1,0,0,30); selLbl.BackgroundColor3=C.card
-    selLbl.BorderSizePixel=0; MkCorner(selLbl,6)
-    selLbl.Text="  "..QuestZones[1].name.."  |  Lv "..QuestZones[1].minLv.."-"..QuestZones[1].maxLv
-    selLbl.TextColor3=C.accent2; selLbl.TextSize=11; selLbl.Font=Enum.Font.GothamBold
-    selLbl.TextXAlignment=Enum.TextXAlignment.Left; MkPad(selLbl,8,0,0,0)
+    local selL=Instance.new("TextLabel",pg); selL.Size=UDim2.new(1,0,0,30); selL.BackgroundColor3=C.card
+    selL.BorderSizePixel=0; Rnd(selL,6); Pad(selL,10,0,0,0)
+    selL.Text=Zones[1].name.."  Lv "..Zones[1].minLv.."-"..Zones[1].maxLv
+    selL.TextColor3=C.acc2; selL.TextSize=11; selL.Font=Enum.Font.GothamBold; selL.TextXAlignment=Enum.TextXAlignment.Left
 
-    local arrowRow=Instance.new("Frame",pg)
-    arrowRow.Size=UDim2.new(1,0,0,32); arrowRow.BackgroundTransparency=1
-    MkList(arrowRow,Enum.FillDirection.Horizontal,6)
-
-    local function ArrowBtn(t,cb2)
-        local b=Instance.new("TextButton",arrowRow)
-        b.Size=UDim2.new(0.5,-3,1,0); b.BackgroundColor3=C.card
-        b.Text=t; b.TextColor3=C.text; b.TextSize=11; b.Font=Enum.Font.GothamBold
-        b.BorderSizePixel=0; MkCorner(b,6); MkStroke(b,C.border,1)
+    local aRow=Instance.new("Frame",pg); aRow.Size=UDim2.new(1,0,0,32); aRow.BackgroundTransparency=1
+    Lst(aRow,Enum.FillDirection.Horizontal,6)
+    local function ABtn(t,cb2)
+        local b=Instance.new("TextButton",aRow); b.Size=UDim2.new(0.5,-3,1,0)
+        b.BackgroundColor3=C.card; b.Text=t; b.TextColor3=C.text; b.TextSize=11
+        b.Font=Enum.Font.GothamBold; b.BorderSizePixel=0; Rnd(b,6); Str(b,C.bord,1)
         b.MouseButton1Click:Connect(cb2)
     end
-    ArrowBtn("< ANTERIOR",function()
-        selIdx=math.max(1,selIdx-1)
-        local z=QuestZones[selIdx]
-        selLbl.Text="  "..z.name.."  |  Lv "..z.minLv.."-"..z.maxLv
+    ABtn("< ANTERIOR",function()
+        selIdx=math.max(1,selIdx-1); local z=Zones[selIdx]
+        selL.Text=z.name.."  Lv "..z.minLv.."-"..z.maxLv
     end)
-    ArrowBtn("PROXIMA >",function()
-        selIdx=math.min(#QuestZones,selIdx+1)
-        local z=QuestZones[selIdx]
-        selLbl.Text="  "..z.name.."  |  Lv "..z.minLv.."-"..z.maxLv
+    ABtn("PROXIMA >",function()
+        selIdx=math.min(#Zones,selIdx+1); local z=Zones[selIdx]
+        selL.Text=z.name.."  Lv "..z.minLv.."-"..z.maxLv
     end)
-
-    Button(pg,"CALIBRAR islePos (posicao do NPC Quest)",function()
+    Btn(pg,"CALIBRAR POSICAO DO NPC QUEST",function()
         local c=LP.Character; if not c or not c:FindFirstChild("HumanoidRootPart") then return end
-        local pos=c.HumanoidRootPart.Position
-        QuestZones[selIdx].islePos=pos
-        sLbl.Text=("OK — islePos [%s] = %.0f, %.0f, %.0f"):format(
-            QuestZones[selIdx].name,pos.X,pos.Y,pos.Z)
+        local pos=c.HumanoidRootPart.Position; Zones[selIdx].islePos=pos
+        sl.Text=("OK islePos [%s] = %.0f,%.0f,%.0f"):format(Zones[selIdx].name,pos.X,pos.Y,pos.Z)
     end)
-    Button(pg,"CALIBRAR mobPos (area dos mobs)",function()
+    Btn(pg,"CALIBRAR POSICAO DOS MOBS",function()
         local c=LP.Character; if not c or not c:FindFirstChild("HumanoidRootPart") then return end
-        local pos=c.HumanoidRootPart.Position
-        QuestZones[selIdx].mobPos=pos
-        sLbl.Text=("OK — mobPos [%s] = %.0f, %.0f, %.0f"):format(
-            QuestZones[selIdx].name,pos.X,pos.Y,pos.Z)
+        local pos=c.HumanoidRootPart.Position; Zones[selIdx].mobPos=pos; Zones[selIdx].islePos=pos
+        sl.Text=("OK mobPos [%s] = %.0f,%.0f,%.0f"):format(Zones[selIdx].name,pos.X,pos.Y,pos.Z)
     end)
-
-    -- botao de calibrar questDesc (para versoes diferentes)
-    Section(pg,"DEPURACAO")
-    Label(pg,"  Nome do mob/quest desta zona (edite se precisar):")
-    local qdIn=Input(pg,QuestZones[1].questDesc)
-    qdIn.Text=QuestZones[1].questDesc
-    -- atualiza quando muda de zona
-    local origArrow1=arrowRow:FindFirstChildOfClass("TextButton")
-
-    Button(pg,"APLICAR NOME DA QUEST",function()
-        QuestZones[selIdx].questDesc=qdIn.Text
-        sLbl.Text="OK — quest ["..QuestZones[selIdx].name.."] = "..qdIn.Text
-    end)
-    Button(pg,"COPIAR POSICAO ATUAL",function()
+    Btn(pg,"COPIAR POSICAO ATUAL",function()
         local c=LP.Character
         if c and c:FindFirstChild("HumanoidRootPart") then
             local p=c.HumanoidRootPart.Position
-            local str=("%.1f, %.1f, %.1f"):format(p.X,p.Y,p.Z)
-            pcall(function() setclipboard(str) end)
-            sLbl.Text="Copiado: "..str
+            local s=("%.1f, %.1f, %.1f"):format(p.X,p.Y,p.Z)
+            pcall(function() setclipboard(s) end); sl.Text="Copiado: "..s
         end
     end)
 
-    Section(pg,"ZONAS DISPONIVEIS")
-    for _,z in ipairs(QuestZones) do
-        Label(pg,("  Lv %3d - %-3d  |  %s  |  %s"):format(
-            z.minLv,z.maxLv,z.name,z.questDesc))
+    Sec(pg,"ZONAS")
+    for _,z in ipairs(Zones) do
+        Lbl(pg,("  Lv %4d-%-4d  %s"):format(z.minLv,z.maxLv,z.name))
     end
 end
 
@@ -1206,15 +822,15 @@ end
 -- ============================================================
 do
     local pg=Pages["ESP"]
-    Section(pg,"JOGADORES")
-    Toggle(pg,"Player ESP",          false,function(v) Cfg.PlayerESP=v end)
-    Toggle(pg,"Mostrar Distancia",   true, function(v) Cfg.ShowDist=v end)
-    Toggle(pg,"Tracer Lines",        false,function(v) Cfg.TracerLines=v end)
-    Section(pg,"FRUTAS")
-    Toggle(pg,"Fruit ESP",           false,function(v) Cfg.FruitESP=v end)
-    Section(pg,"CONFIGURACOES")
-    Label(pg,"  Distancia maxima (studs):")
-    local rIn=Input(pg,"2000",function(v) Cfg.ESPRange=tonumber(v) or 2000 end); rIn.Text="2000"
+    Sec(pg,"JOGADORES")
+    Tog(pg,"Player ESP",         false,function(v) Cfg.PlayerESP=v end)
+    Tog(pg,"Mostrar Distancia",  true, function(v) Cfg.ShowDist=v end)
+    Tog(pg,"Tracer Lines",       false,function(v) Cfg.TracerLines=v end)
+    Sec(pg,"FRUTAS")
+    Tog(pg,"Fruit ESP",          false,function(v) Cfg.FruitESP=v end)
+    Sec(pg,"RANGE")
+    Lbl(pg,"  Distancia maxima (studs):")
+    local rI=Inp(pg,"2000",function(v) Cfg.ESPRange=tonumber(v) or 2000 end); rI.Text="2000"
 end
 
 -- ============================================================
@@ -1222,49 +838,46 @@ end
 -- ============================================================
 do
     local pg=Pages["TELEPORT"]
-    Section(pg,"FRUTAS")
-    Button(pg,"Teleportar para Fruta Mais Proxima",TP_NearestFruit,true)
-    Section(pg,"JOGADORES")
-    Label(pg,"  Nome do jogador:")
-    local plrIn=Input(pg,"username...")
-    Button(pg,"Ir para Jogador",function() TP_Player(plrIn.Text) end)
-    Button(pg,"Listar Jogadores Online",function()
+    Sec(pg,"FRUTAS")
+    Btn(pg,"Ir para Fruta Mais Proxima",TP_NearestFruit,true)
+    Sec(pg,"JOGADORES")
+    Lbl(pg,"  Nome do jogador:")
+    local pI=Inp(pg,"username...")
+    Btn(pg,"Ir para Jogador",function() TP_Player(pI.Text) end)
+    Btn(pg,"Listar Online",function()
         local n={}
         for _,p in ipairs(Players:GetPlayers()) do if p~=LP then table.insert(n,p.Name) end end
-        plrIn.Text=table.concat(n,", ")
+        pI.Text=table.concat(n,", ")
     end)
-    Section(pg,"COORDENADAS")
-    Label(pg,"  X, Y, Z separados por virgula:")
-    local cIn=Input(pg,"0, 100, 0")
-    Button(pg,"Ir para Coordenadas",function()
-        local t=string.split(cIn.Text,",")
+    Sec(pg,"COORDENADAS")
+    Lbl(pg,"  X, Y, Z separados por virgula:")
+    local cI=Inp(pg,"0, 100, 0")
+    Btn(pg,"Ir para Coordenadas",function()
+        local t=string.split(cI.Text,",")
         local x,y,z=tonumber(t[1]),tonumber(t[2]),tonumber(t[3])
         if x and y and z then SafeTP(Vector3.new(x,y,z)) end
     end)
-    Button(pg,"Copiar Posicao Atual",function()
+    Btn(pg,"Copiar Posicao Atual",function()
         local c=LP.Character
         if c and c:FindFirstChild("HumanoidRootPart") then
             local p=c.HumanoidRootPart.Position
-            local str=("%.1f, %.1f, %.1f"):format(p.X,p.Y,p.Z)
-            pcall(function() setclipboard(str) end); cIn.Text=str
+            local s=("%.1f, %.1f, %.1f"):format(p.X,p.Y,p.Z)
+            pcall(function() setclipboard(s) end); cI.Text=s
         end
     end)
-end
-
--- ============================================================
---  ILHAS
--- ============================================================
-do
-    local pg=Pages["ILHAS"]
-    Section(pg,"FIRST SEA")
-    local order={
-        "Starter Island","Pirate Island","Soldier Island","Shark Island",
-        "Chef Ship","Snow Island","Sand Kingdom","Sky Island",
-        "Bubble Island","Lobby Island","Zombie Island","War Island","Fishland",
+    Sec(pg,"ILHAS RAPIDAS")
+    local isles={
+        {"Starter Island",Vector3.new(-2044,100,-4591)},
+        {"Pirate Island", Vector3.new(-681,64,-3449)},
+        {"Soldier Island",Vector3.new(990,28,-510)},
+        {"Shark Island",  Vector3.new(1822,28,1492)},
+        {"Chef Ship",     Vector3.new(-792,28,1242)},
+        {"Snow Island",   Vector3.new(1622,28,-872)},
+        {"Sand Kingdom",  Vector3.new(-3052,28,1978)},
+        {"Sky Island",    Vector3.new(-2822,865,-1632)},
     }
-    for _,name in ipairs(order) do
-        local p=Locs[name]
-        if p then Button(pg,name,function() TP(p) end) end
+    for _,il in ipairs(isles) do
+        Btn(pg,il[1],function() SafeTP(il[2]) end)
     end
 end
 
@@ -1273,54 +886,30 @@ end
 -- ============================================================
 do
     local pg=Pages["MISC"]
-    Section(pg,"COMBATE")
-    Toggle(pg,"Auto Ataque (ataque livre + hover)",false,function(v)
-        AutoAttack=v
-    end)
-    Section(pg,"MOVIMENTACAO")
-    Toggle(pg,"No Clip",false,function(v)
+    Sec(pg,"COMBATE")
+    Tog(pg,"Auto Ataque Livre (hover)",false,function(v) AutoAttack=v end)
+    Sec(pg,"MOVIMENTO")
+    Tog(pg,"No Clip",false,function(v)
         local c=LP.Character
-        if c then for _,p in ipairs(c:GetDescendants()) do
-            if p:IsA("BasePart") then p.CanCollide=not v end
-        end end
+        if c then for _,p in ipairs(c:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide=not v end end end
     end)
-    Toggle(pg,"Infinite Jump",false,function(v)
+    Tog(pg,"Infinite Jump",false,function(v)
         getgenv()._infJ=v
-        if v and not getgenv()._infJConn then
-            getgenv()._infJConn=UserInputService.JumpRequest:Connect(function()
+        if v and not getgenv()._infJC then
+            getgenv()._infJC=UserInputService.JumpRequest:Connect(function()
                 if getgenv()._infJ then
                     local c=LP.Character
-                    if c and c:FindFirstChild("Humanoid") then
-                        c.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-                    end
+                    if c and c:FindFirstChild("Humanoid") then c.Humanoid:ChangeState(Enum.HumanoidStateType.Jumping) end
                 end
             end)
-        elseif not v and getgenv()._infJConn then
-            getgenv()._infJConn:Disconnect(); getgenv()._infJConn=nil
-        end
+        elseif not v and getgenv()._infJC then getgenv()._infJC:Disconnect(); getgenv()._infJC=nil end
     end)
-    Section(pg,"WALK SPEED"); Label(pg,"  Padrao: 16")
-    Input(pg,"16",function(v)
-        local n=tonumber(v); local c=LP.Character
-        if n and c and c:FindFirstChild("Humanoid") then c.Humanoid.WalkSpeed=n end
-    end)
-    Section(pg,"JUMP POWER"); Label(pg,"  Padrao: 50")
-    Input(pg,"50",function(v)
-        local n=tonumber(v); local c=LP.Character
-        if n and c and c:FindFirstChild("Humanoid") then c.Humanoid.JumpPower=n end
-    end)
-    Section(pg,"UTILITARIOS")
-    Button(pg,"Copiar Posicao",function()
-        local c=LP.Character
-        if c and c:FindFirstChild("HumanoidRootPart") then
-            local p=c.HumanoidRootPart.Position
-            pcall(function() setclipboard(("%.1f, %.1f, %.1f"):format(p.X,p.Y,p.Z)) end)
-        end
-    end)
-    Button(pg,"Recarregar Personagem",function()
-        SetCharCollision(true); LP:LoadCharacter()
-    end)
-    Button(pg,"Restaurar Colisao",function() SetCharCollision(true) end)
+    Sec(pg,"VELOCIDADE")
+    Lbl(pg,"  Walk Speed (padrao 16):"); Inp(pg,"16",function(v) local n=tonumber(v); local c=LP.Character; if n and c and c:FindFirstChild("Humanoid") then c.Humanoid.WalkSpeed=n end end)
+    Lbl(pg,"  Jump Power (padrao 50):"); Inp(pg,"50",function(v) local n=tonumber(v); local c=LP.Character; if n and c and c:FindFirstChild("Humanoid") then c.Humanoid.JumpPower=n end end)
+    Sec(pg,"UTILITARIOS")
+    Btn(pg,"Restaurar Colisao",    function() SetCollision(true) end)
+    Btn(pg,"Recarregar Personagem",function() SetCollision(true); LP:LoadCharacter() end)
 end
 
 -- ============================================================
@@ -1328,143 +917,103 @@ end
 -- ============================================================
 do
     local pg=Pages["WEBHOOK"]
-    Section(pg,"URL DO WEBHOOK DISCORD")
-    Input(pg,"https://discord.com/api/webhooks/...",function(v) Cfg.WHUrl=v end)
-    local function SendWH(title,desc,color)
+    Sec(pg,"URL DISCORD")
+    Inp(pg,"https://discord.com/api/webhooks/...",function(v) Cfg.WHUrl=v end)
+    local function WH(t,d,col)
         if not Cfg.WHUrl or Cfg.WHUrl=="" then return end
-        local req=syn and syn.request or (http and http.request) or request
-        if not req then return end
-        pcall(req,{Url=Cfg.WHUrl,Method="POST",
-            Headers={["Content-Type"]="application/json"},
-            Body=HttpService:JSONEncode({username="China Hub Free",embeds={{
-                title=title,description=desc,color=color or 16777215,
-                footer={text="King Legacy | "..LP.Name},
-                timestamp=os.date("!%Y-%m-%dT%H:%M:%SZ")
-            }}})})
+        local req=syn and syn.request or (http and http.request) or request; if not req then return end
+        pcall(req,{Url=Cfg.WHUrl,Method="POST",Headers={["Content-Type"]="application/json"},
+            Body=HttpService:JSONEncode({username="China Hub Free",embeds={{title=t,description=d,color=col or 16777215,footer={text="KL | "..LP.Name},timestamp=os.date("!%Y-%m-%dT%H:%M:%SZ")}}})})
     end
-    Section(pg,"ENVIO MANUAL")
-    Label(pg,"  Titulo:"); local wht=Input(pg,"Titulo...")
-    Label(pg,"  Mensagem:"); local whm=Input(pg,"Mensagem...")
-    Button(pg,"Enviar",function() SendWH(wht.Text,whm.Text,3447003) end,true)
-    Button(pg,"Testar Conexao",function()
-        SendWH("Teste OK","Conectado como **"..LP.Name.."**",65280)
-    end)
+    Sec(pg,"ENVIO")
+    Lbl(pg,"  Titulo:"); local wt=Inp(pg,"Titulo...")
+    Lbl(pg,"  Mensagem:"); local wm=Inp(pg,"Mensagem...")
+    Btn(pg,"Enviar",function() WH(wt.Text,wm.Text,3447003) end,true)
+    Btn(pg,"Testar",function() WH("Teste OK","Conectado: **"..LP.Name.."**",65280) end)
 end
 
 -- ============================================================
 --  ESP UPDATE
 -- ============================================================
 local PLR_ESP={}
-local function MakePlayerESP(pl)
+local function MkESP(pl)
     if pl==LP or PLR_ESP[pl] then return end
-    PLR_ESP[pl]={
-        box=NewBox(Cfg.Col_Player), name=NewText(Cfg.Col_Player,13),
-        dist=NewText(Color3.new(1,1,1),11),
-        hpBg=NewBox(Color3.fromRGB(40,40,40),true),
-        hpBar=NewBox(Color3.fromRGB(60,210,100),true),
-        tracer=NewLine(Cfg.Col_Player),
-    }
+    PLR_ESP[pl]={box=NBox(Cfg.Col_P),name=NTxt(Cfg.Col_P,13),dist=NTxt(Color3.new(1,1,1),11),hpBg=NBox(Color3.fromRGB(38,38,38),true),hpBar=NBox(Color3.fromRGB(55,205,100),true),tracer=NLine(Cfg.Col_P)}
 end
-local function KillPlayerESP(pl)
-    if PLR_ESP[pl] then
-        for _,o in pairs(PLR_ESP[pl]) do pcall(function() o:Remove() end) end
-        PLR_ESP[pl]=nil
-    end
+local function KillESP(pl)
+    if PLR_ESP[pl] then for _,o in pairs(PLR_ESP[pl]) do pcall(function() o:Remove() end) end; PLR_ESP[pl]=nil end
 end
-local FruitPool={}
-local function ClearPool(pool)
-    for _,obj in pairs(pool) do
-        if obj.lbl  then pcall(function() obj.lbl:Remove() end) end
-        if obj.dist then pcall(function() obj.dist:Remove() end) end
-    end
-    table.clear(pool)
+local FPool={}
+local function ClearFPool()
+    for _,o in pairs(FPool) do
+        if o.lbl then pcall(function() o.lbl:Remove() end) end
+        if o.d   then pcall(function() o.d:Remove()   end) end
+    end; table.clear(FPool)
 end
 
-local function UpdatePlayerESP()
+local function UpdP()
     for _,pl in ipairs(Players:GetPlayers()) do
         if pl==LP then continue end
-        if not PLR_ESP[pl] then MakePlayerESP(pl) end
+        if not PLR_ESP[pl] then MkESP(pl) end
         local obj=PLR_ESP[pl]; if not obj then continue end
         local char=pl.Character
-        if not Cfg.PlayerESP or not char
-           or not char:FindFirstChild("HumanoidRootPart")
-           or not char:FindFirstChild("Humanoid") then
+        if not Cfg.PlayerESP or not char or not char:FindFirstChild("HumanoidRootPart") or not char:FindFirstChild("Humanoid") then
             for _,o in pairs(obj) do o.Visible=false end; continue
         end
         local hrp=char.HumanoidRootPart; local hum=char.Humanoid
-        local d=Dist(hrp.Position)
-        if d>Cfg.ESPRange then for _,o in pairs(obj) do o.Visible=false end; continue end
-        local top2D,_,topV=W2V(hrp.Position+Vector3.new(0,3.2,0))
-        local bot2D,_,botV=W2V(hrp.Position-Vector3.new(0,2.8,0))
-        if not topV and not botV then for _,o in pairs(obj) do o.Visible=false end; continue end
-        local bH=math.abs(top2D.Y-bot2D.Y); local bW=bH*0.55; local bX=top2D.X-bW/2
-        obj.box.Size=Vector2.new(bW,bH); obj.box.Position=Vector2.new(bX,top2D.Y)
-        obj.box.Color=Cfg.Col_Player; obj.box.Visible=true
-        obj.name.Text=pl.DisplayName; obj.name.Position=Vector2.new(top2D.X,top2D.Y-16)
-        obj.name.Color=Cfg.Col_Player; obj.name.Visible=true
-        obj.dist.Text=d.."m"; obj.dist.Position=Vector2.new(top2D.X,top2D.Y-29)
-        obj.dist.Visible=Cfg.ShowDist
+        local d=Dist(hrp.Position); if d>Cfg.ESPRange then for _,o in pairs(obj) do o.Visible=false end; continue end
+        local t2D,_,tV=W2V(hrp.Position+Vector3.new(0,3.2,0)); local b2D,_,bV=W2V(hrp.Position-Vector3.new(0,2.8,0))
+        if not tV and not bV then for _,o in pairs(obj) do o.Visible=false end; continue end
+        local bH=math.abs(t2D.Y-b2D.Y); local bW=bH*0.55; local bX=t2D.X-bW/2
+        obj.box.Size=Vector2.new(bW,bH); obj.box.Position=Vector2.new(bX,t2D.Y); obj.box.Color=Cfg.Col_P; obj.box.Visible=true
+        obj.name.Text=pl.DisplayName; obj.name.Position=Vector2.new(t2D.X,t2D.Y-16); obj.name.Color=Cfg.Col_P; obj.name.Visible=true
+        obj.dist.Text=d.."m"; obj.dist.Position=Vector2.new(t2D.X,t2D.Y-28); obj.dist.Visible=Cfg.ShowDist
         local hp=math.clamp(hum.Health/math.max(hum.MaxHealth,1),0,1)
-        obj.hpBg.Size=Vector2.new(4,bH); obj.hpBg.Position=Vector2.new(bX+bW+3,top2D.Y); obj.hpBg.Visible=true
-        obj.hpBar.Size=Vector2.new(4,bH*hp); obj.hpBar.Position=Vector2.new(bX+bW+3,top2D.Y+bH*(1-hp))
-        obj.hpBar.Color=Color3.fromRGB(255*(1-hp),255*hp,0); obj.hpBar.Visible=true
-        local ctr=Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y)
-        obj.tracer.From=ctr; obj.tracer.To=bot2D
-        obj.tracer.Color=Cfg.Col_Player; obj.tracer.Visible=Cfg.TracerLines
+        obj.hpBg.Size=Vector2.new(4,bH); obj.hpBg.Position=Vector2.new(bX+bW+3,t2D.Y); obj.hpBg.Visible=true
+        obj.hpBar.Size=Vector2.new(4,bH*hp); obj.hpBar.Position=Vector2.new(bX+bW+3,t2D.Y+bH*(1-hp)); obj.hpBar.Color=Color3.fromRGB(255*(1-hp),255*hp,0); obj.hpBar.Visible=true
+        obj.tracer.From=Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y); obj.tracer.To=b2D; obj.tracer.Color=Cfg.Col_P; obj.tracer.Visible=Cfg.TracerLines
     end
 end
-
-local function UpdateFruitESP()
-    ClearPool(FruitPool); if not Cfg.FruitESP then return end
+local function UpdF()
+    ClearFPool(); if not Cfg.FruitESP then return end
     for _,f in ipairs(ScanFruits()) do
         local d=Dist(f.pos); if d>Cfg.ESPRange then continue end
-        local p2D,_,onScr=W2V(f.pos); if not onScr then continue end
-        local lbl=NewText(Cfg.Col_Fruit,13)
-        lbl.Text="FRUIT  "..f.name; lbl.Position=Vector2.new(p2D.X,p2D.Y-10); lbl.Visible=true
-        local dlbl=NewText(Color3.new(1,1,1),11)
-        dlbl.Text=d.."m"; dlbl.Position=Vector2.new(p2D.X,p2D.Y+6); dlbl.Visible=true
-        table.insert(FruitPool,{lbl=lbl,dist=dlbl})
+        local p2D,_,onS=W2V(f.pos); if not onS then continue end
+        local l=NTxt(Cfg.Col_F,13); l.Text="FRUIT "..f.name; l.Position=Vector2.new(p2D.X,p2D.Y-10); l.Visible=true
+        local dl=NTxt(Color3.new(1,1,1),11); dl.Text=d.."m"; dl.Position=Vector2.new(p2D.X,p2D.Y+5); dl.Visible=true
+        table.insert(FPool,{lbl=l,d=dl})
     end
 end
 
--- ============================================================
---  SHOW/HIDE BUTTON
--- ============================================================
-local ShowBtn=Instance.new("TextButton",SG)
-ShowBtn.Size=UDim2.new(0,140,0,32); ShowBtn.Position=UDim2.new(0,20,0,55)
-ShowBtn.BackgroundColor3=C.sidebar; ShowBtn.Text="CHINA HUB FREE"
-ShowBtn.TextColor3=C.accent2; ShowBtn.TextSize=11; ShowBtn.Font=Enum.Font.GothamBold
-ShowBtn.BorderSizePixel=0; ShowBtn.Visible=false
-MkCorner(ShowBtn,8); MkStroke(ShowBtn,C.accent,1.5)
-
-local function ToggleVis()
-    if WIN.Visible then WIN.Visible=false; ShowBtn.Visible=true
-    else WIN.Visible=true; ShowBtn.Visible=false end
+-- show/hide
+local SBtn=Instance.new("TextButton",SG)
+SBtn.Size=UDim2.new(0,130,0,30); SBtn.Position=UDim2.new(0,20,0,55)
+SBtn.BackgroundColor3=C.side; SBtn.Text="CHINA HUB FREE"; SBtn.TextColor3=C.acc2
+SBtn.TextSize=10; SBtn.Font=Enum.Font.GothamBold; SBtn.BorderSizePixel=0; SBtn.Visible=false
+Rnd(SBtn,8); Str(SBtn,C.acc,1.5)
+local function TogVis()
+    if WIN.Visible then WIN.Visible=false; SBtn.Visible=true
+    else WIN.Visible=true; SBtn.Visible=false end
 end
-ShowBtn.MouseButton1Click:Connect(ToggleVis)
-UserInputService.InputBegan:Connect(function(inp,gpe)
+SBtn.MouseButton1Click:Connect(TogVis)
+UserInputService.InputBegan:Connect(function(i,gpe)
     if gpe then return end
-    if inp.UserInputType==Enum.UserInputType.Keyboard
-       and inp.KeyCode==Cfg.HideKey then ToggleVis() end
+    if i.UserInputType==Enum.UserInputType.Keyboard and i.KeyCode==Cfg.HideKey then TogVis() end
 end)
 
--- ============================================================
---  INIT
--- ============================================================
-SwitchTab("HOME")
-
-for _,pl in ipairs(Players:GetPlayers()) do MakePlayerESP(pl) end
-Players.PlayerAdded:Connect(function(pl) task.wait(1); MakePlayerESP(pl) end)
-Players.PlayerRemoving:Connect(KillPlayerESP)
+-- init
+Switch("FARM")
+for _,pl in ipairs(Players:GetPlayers()) do MkESP(pl) end
+Players.PlayerAdded:Connect(function(pl) task.wait(1); MkESP(pl) end)
+Players.PlayerRemoving:Connect(KillESP)
 LP.CharacterAdded:Connect(function()
-    SetCharCollision(true); Farm.State="idle"; task.wait(0.5)
-    for _,pl in ipairs(Players:GetPlayers()) do MakePlayerESP(pl) end
+    SetCollision(true); Farm.State="idle"; task.wait(0.5)
+    for _,pl in ipairs(Players:GetPlayers()) do MkESP(pl) end
 end)
-
 local t2=0
 RunService.RenderStepped:Connect(function()
-    t2=t2+1; UpdatePlayerESP()
-    if t2%14==0 then UpdateFruitESP(); t2=0 end
+    t2=t2+1; UpdP()
+    if t2%14==0 then UpdF(); t2=0 end
 end)
 
-print("[China Hub Free v5.0] Carregado — "..LP.Name)
+print("[China Hub Free v6.0] "..LP.Name)
