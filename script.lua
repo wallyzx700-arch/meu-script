@@ -1,6 +1,6 @@
 -- ============================================================
---  China Hub Free v4.1 — King Legacy
---  Farm reescrito | NPC scan automático | Seletor Melee/Sword/Fruit
+--  China Hub Free v4.2 — King Legacy
+--  Farm reescrito | Zonas corretas | Mob-Lock Aéreo | NPC fix
 -- ============================================================
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
@@ -37,12 +37,22 @@ local Farm = {
     StatusText  = "Inativo",
     KillCount   = 0,
     TargetKills = 10,
+    HoverHeight = 12,      -- studs acima do mob
 }
 local AutoAttack  = false
 local questNPCRef = nil
 local SEA_Y       = 8
-local SCAN_RADIUS = 300
+local SCAN_RADIUS = 350
 local QUEST_TIMEOUT = 120
+
+-- colisão do char durante mob-lock
+local function SetCharCollision(enabled)
+    local char = LP.Character
+    if not char then return end
+    for _, p in ipairs(char:GetDescendants()) do
+        if p:IsA("BasePart") then p.CanCollide = enabled end
+    end
+end
 
 -- ============================================================
 --  DRAWING
@@ -95,32 +105,51 @@ local function SafeTP(pos)
 end
 
 -- ============================================================
---  ZONAS
+--  ZONAS — corrigidas com wiki v10
+--  Coordenadas: aproximadas, use "Calibrar" in-game para ajustar
 -- ============================================================
 local QuestZones = {
-    { name="Ilha Inicial",      minLv=1,   maxLv=14,
+    --  name             minLv  maxLv   islePos (NPC)              mobPos (mobs)
+    { name="Starter Island",   minLv=1,    maxLv=49,
       islePos=Vector3.new(-210,28,180),    mobPos=Vector3.new(-268,20,215) },
-    { name="Base Marinha",      minLv=15,  maxLv=34,
-      islePos=Vector3.new(990,28,-510),    mobPos=Vector3.new(948,20,-472) },
-    { name="Ilha Buggy",        minLv=35,  maxLv=59,
+
+    { name="Pirate Island",    minLv=50,   maxLv=99,
       islePos=Vector3.new(402,28,-1002),   mobPos=Vector3.new(465,20,-958) },
-    { name="Baratie",           minLv=60,  maxLv=89,
-      islePos=Vector3.new(-792,28,1242),   mobPos=Vector3.new(-832,20,1198) },
-    { name="Arlong Park",       minLv=90,  maxLv=124,
+
+    { name="Soldier Island",   minLv=100,  maxLv=179,
+      islePos=Vector3.new(990,28,-510),    mobPos=Vector3.new(948,20,-472) },
+
+    { name="Shark Island",     minLv=180,  maxLv=249,
       islePos=Vector3.new(1822,28,1492),   mobPos=Vector3.new(1778,20,1448) },
-    { name="Coliseu",           minLv=125, maxLv=174,
+
+    { name="Chef Ship",        minLv=250,  maxLv=399,
+      islePos=Vector3.new(-792,28,1242),   mobPos=Vector3.new(-832,20,1198) },
+
+    { name="Snow Island",      minLv=400,  maxLv=499,
       islePos=Vector3.new(1622,28,-872),   mobPos=Vector3.new(1575,20,-935) },
-    { name="Ilha dos Tubarões", minLv=175, maxLv=224,
+
+    { name="Rocks Island",     minLv=500,  maxLv=524,
+      islePos=Vector3.new(-1200,28,-500),  mobPos=Vector3.new(-1250,20,-550) },
+
+    { name="Sand Kingdom",     minLv=525,  maxLv=799,
       islePos=Vector3.new(-3052,28,1978),  mobPos=Vector3.new(-3105,20,2022) },
-    { name="Marineford",        minLv=225, maxLv=274,
-      islePos=Vector3.new(2552,28,-2058),  mobPos=Vector3.new(2508,20,-2135) },
-    { name="Shanks Island",     minLv=275, maxLv=324,
-      islePos=Vector3.new(-1892,28,-858),  mobPos=Vector3.new(-1945,20,-802) },
-    { name="Mihawk Island",     minLv=325, maxLv=374,
-      islePos=Vector3.new(-2492,28,-312),  mobPos=Vector3.new(-2562,20,-375) },
-    { name="Skypiea",           minLv=375, maxLv=449,
+
+    { name="Sky Island",       minLv=800,  maxLv=999,
       islePos=Vector3.new(-2822,865,-1632),mobPos=Vector3.new(-2892,858,-1702) },
-    { name="Upper Yard",        minLv=450, maxLv=999,
+
+    { name="Bubble Island",    minLv=1000, maxLv=1249,
+      islePos=Vector3.new(2552,28,-2058),  mobPos=Vector3.new(2508,20,-2135) },
+
+    { name="Lobby Island",     minLv=1250, maxLv=1499,
+      islePos=Vector3.new(-1892,28,-858),  mobPos=Vector3.new(-1945,20,-802) },
+
+    { name="Zombie Island",    minLv=1500, maxLv=1749,
+      islePos=Vector3.new(-2492,28,-312),  mobPos=Vector3.new(-2562,20,-375) },
+
+    { name="War Island",       minLv=1750, maxLv=1999,
+      islePos=Vector3.new(2552,28,-2058),  mobPos=Vector3.new(2508,20,-2135) },
+
+    { name="Fishland",         minLv=2000, maxLv=9999,
       islePos=Vector3.new(-3102,882,-1922),mobPos=Vector3.new(-3172,872,-1992) },
 }
 
@@ -149,8 +178,10 @@ local function GetZoneForLevel(lv)
 end
 
 -- ============================================================
---  DETECÇÃO DE NPC DE MISSÃO
---  Duplo critério: ActionText + BillboardGui com "Missão"
+--  DETECÇÃO DE NPC DE MISSÃO — v2
+--  Prioridade: modelo chamado "Quest" ou parte com nome "Quest"
+--  Fallback: ProximityPrompt com ActionText de missão
+--  Filtro: nada abaixo do mar, nada em barco
 -- ============================================================
 local BOAT_NAMES = {
     "boat","ship","navio","ferry","barca","vessel",
@@ -169,13 +200,18 @@ local function IsBoatDescendant(obj)
     return false
 end
 
-local function HasMissaoLabel(model)
+-- King Legacy usa modelos/NPCs literalmente chamados "Quest" na maioria das ilhas
+local function IsQuestModel(model)
+    if not model or not model:IsA("Model") then return false end
+    local n = model.Name:lower()
+    if n == "quest" or n:find("^quest") then return true end
+    -- verifica se tem BillboardGui com texto de missão
     for _, obj in ipairs(model:GetDescendants()) do
-        if obj:IsA("BillboardGui") or obj:IsA("SurfaceGui") then
+        if (obj:IsA("BillboardGui") or obj:IsA("SurfaceGui")) then
             for _, lbl in ipairs(obj:GetDescendants()) do
                 if lbl:IsA("TextLabel") or lbl:IsA("TextButton") then
                     local t = lbl.Text:lower()
-                    if t:find("miss") or t:find("quest") then return true end
+                    if t:find("quest") or t:find("miss") then return true end
                 end
             end
         end
@@ -183,32 +219,52 @@ local function HasMissaoLabel(model)
     return false
 end
 
--- Scan principal — encontra NPC de missão mais próximo de um ponto
+local function GetModelRoot(model)
+    if model.PrimaryPart then return model.PrimaryPart end
+    return model:FindFirstChildOfClass("BasePart")
+end
+
+-- scan principal
 local function FindMissionNPC(nearPos, maxRadius)
     maxRadius = maxRadius or SCAN_RADIUS
     local best, bestDist = nil, math.huge
 
+    -- Passe 1: procura modelo chamado "Quest" diretamente
     for _, obj in ipairs(workspace:GetDescendants()) do
-        if not obj:IsA("ProximityPrompt") then continue end
-        local part = obj.Parent
-        if not (part and part:IsA("BasePart")) then continue end
-        if part.Position.Y < SEA_Y then continue end
-        if IsBoatDescendant(part) then continue end
-
-        local d = (part.Position - nearPos).Magnitude
-        if d >= maxRadius or d >= bestDist then continue end
-
-        local at = (obj.ActionText or ""):lower()
-        local isQuestPrompt = at:find("interagir") or at:find("interact")
-            or at:find("quest") or at:find("miss")
-
-        local model = part.Parent
-        local hasMissaoUI = model and model:IsA("Model") and HasMissaoLabel(model)
-
-        if isQuestPrompt or hasMissaoUI then
-            best = obj; bestDist = d
+        if obj:IsA("Model") and IsQuestModel(obj) then
+            local root = GetModelRoot(obj)
+            if not root then continue end
+            if root.Position.Y < SEA_Y then continue end
+            if IsBoatDescendant(root) then continue end
+            local d = (root.Position - nearPos).Magnitude
+            if d < maxRadius and d < bestDist then
+                -- pega o ProximityPrompt dentro dele
+                local pp = obj:FindFirstChildOfClass("ProximityPrompt")
+                    or obj:FindFirstDescendantOfClass("ProximityPrompt")
+                if pp then best = pp; bestDist = d end
+            end
         end
     end
+
+    -- Passe 2: fallback ProximityPrompt genérico
+    if not best then
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj:IsA("ProximityPrompt") then
+                local part = obj.Parent
+                if not (part and part:IsA("BasePart")) then continue end
+                if part.Position.Y < SEA_Y then continue end
+                if IsBoatDescendant(part) then continue end
+                local d = (part.Position - nearPos).Magnitude
+                if d >= maxRadius or d >= bestDist then continue end
+                local at = (obj.ActionText or ""):lower()
+                if at:find("interagir") or at:find("interact")
+                   or at:find("quest") or at:find("miss") then
+                    best = obj; bestDist = d
+                end
+            end
+        end
+    end
+
     return best, bestDist
 end
 
@@ -232,9 +288,10 @@ local function NearestMob(zoneCenter, zoneRadius)
             if hum and hrp and hum.Health > 0
                and not Players:GetPlayerFromCharacter(obj) then
                 if zoneCenter and
-                   (hrp.Position - zoneCenter).Magnitude > (zoneRadius or 400) then
+                   (hrp.Position - zoneCenter).Magnitude > (zoneRadius or 500) then
                     continue
                 end
+                if hrp.Position.Y < SEA_Y then continue end
                 local d = (origin - hrp.Position).Magnitude
                 if d < bestDist then bestDist = d; best = obj end
             end
@@ -254,14 +311,13 @@ local function EquipSword()
             local n = tool.Name:lower()
             if n:find("sword") or n:find("katana") or n:find("blade")
                or n:find("cutlass") or n:find("saber") or n:find("espada")
-               or n:find("knife") or n:find("dao") or n:find("gun") then
+               or n:find("knife") or n:find("dao") then
                 char.Humanoid:EquipTool(tool)
                 task.wait(0.3)
                 return true
             end
         end
     end
-    -- fallback: equipa a primeira tool
     local t = LP.Backpack:FindFirstChildOfClass("Tool")
     if t then char.Humanoid:EquipTool(t); task.wait(0.3); return true end
     return false
@@ -287,37 +343,49 @@ local function PressKey(keyCode)
     return pressed
 end
 
-local function AttackMob(mob)
+-- ============================================================
+--  ATTACK MOB — mob-lock aéreo
+--  Personagem flutua Farm.HoverHeight studs acima do HRP do mob,
+--  sem colisão, atacando de cima — retira hitbox do chão
+-- ============================================================
+local function AttackMobHover(mob)
     local char = LP.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
     local hrp = mob:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
-    local dist = (char.HumanoidRootPart.Position - hrp.Position).Magnitude
-    if dist > 7 then
-        char.HumanoidRootPart.CFrame = CFrame.new(hrp.Position + Vector3.new(3,2,0))
-        task.wait(0.08)
-    end
+    -- posição: acima da cabeça do mob
+    local hoverPos = hrp.Position + Vector3.new(0, Farm.HoverHeight, 0)
+    char.HumanoidRootPart.CFrame = CFrame.new(hoverPos)
+    SetCharCollision(false)
+
+    -- lookAt para baixo no mob
+    char.HumanoidRootPart.CFrame = CFrame.lookAt(hoverPos, hrp.Position)
+
+    local sp, _, onScr = Camera:WorldToViewportPoint(hrp.Position)
 
     if Farm.Style == "fruit" then
-        -- Tenta Z, depois X, fallback M1
         if not PressKey(0x5A) then -- Z
-            local sp, _, onScr = Camera:WorldToViewportPoint(hrp.Position)
-            if onScr then VirtualUser:ClickButton1(Vector2.new(sp.X,sp.Y), CFrame.new()) end
+            PressKey(0x58) -- X fallback
+        end
+        if onScr then
+            VirtualUser:ClickButton1(Vector2.new(sp.X, sp.Y), CFrame.new())
         end
     elseif Farm.Style == "sword" then
         EquipSword()
-        local sp, _, onScr = Camera:WorldToViewportPoint(hrp.Position)
-        if onScr then VirtualUser:ClickButton1(Vector2.new(sp.X,sp.Y), CFrame.new()) end
+        if onScr then
+            VirtualUser:ClickButton1(Vector2.new(sp.X, sp.Y), CFrame.new())
+        end
     else
-        -- melee padrão
-        local sp, _, onScr = Camera:WorldToViewportPoint(hrp.Position)
-        if onScr then VirtualUser:ClickButton1(Vector2.new(sp.X,sp.Y), CFrame.new()) end
+        -- melee
+        if onScr then
+            VirtualUser:ClickButton1(Vector2.new(sp.X, sp.Y), CFrame.new())
+        end
     end
 end
 
 -- ============================================================
---  AUTO ATAQUE INDEPENDENTE
+--  AUTO ATAQUE INDEPENDENTE (Misc)
 -- ============================================================
 task.spawn(function()
     while true do
@@ -328,18 +396,22 @@ task.spawn(function()
         local hum = char:FindFirstChildOfClass("Humanoid")
         if not hum or hum.Health <= 0 then task.wait(2); continue end
         local mob = NearestMob()
-        if mob then AttackMob(mob) end
+        if mob then AttackMobHover(mob) end
     end
 end)
 
 -- ============================================================
---  AUTO FARM — máquina de estado corrigida
+--  AUTO FARM — máquina de estado
 --  idle → toisle → toquest → fighting → returning → idle
 -- ============================================================
 task.spawn(function()
     while true do
         task.wait(0.3)
-        if not Farm.Active then Farm.State = "idle"; continue end
+        if not Farm.Active then
+            Farm.State = "idle"
+            SetCharCollision(true)  -- restaura colisão quando inativo
+            continue
+        end
 
         local char = LP.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") then
@@ -348,6 +420,7 @@ task.spawn(function()
         local hum = char:FindFirstChildOfClass("Humanoid")
         if not hum or hum.Health <= 0 then
             Farm.StatusText = "⏳ Aguardando respawn..."
+            SetCharCollision(true)
             Farm.State = "idle"; task.wait(4); continue
         end
 
@@ -359,48 +432,45 @@ task.spawn(function()
             Farm.Zone       = zone
             Farm.KillCount  = 0
             questNPCRef     = nil
+            SetCharCollision(true)
             Farm.State      = "toisle"
             Farm.Timer      = tick()
             Farm.StatusText = ("Lv %d → %s | Viajando..."):format(lv, zone.name)
 
-        -- ── toisle: TP para o centro da ilha ──────────────────
+        -- ── toisle ────────────────────────────────────────────
         elseif Farm.State == "toisle" then
             local ok = SafeTP(Farm.Zone.islePos)
             task.wait(1.3)
             if not ok then Farm.State = "idle"; continue end
-            Farm.StatusText = ("Lv %d → %s | Procurando NPC de Missão..."):format(lv, zone.name)
+            Farm.StatusText = ("Lv %d → %s | Procurando NPC Quest..."):format(lv, zone.name)
             Farm.State = "toquest"
             Farm.Timer = tick()
 
-        -- ── toquest: scan e aceita missão ─────────────────────
+        -- ── toquest ───────────────────────────────────────────
         elseif Farm.State == "toquest" then
             local npc, npcDist = FindMissionNPC(Farm.Zone.islePos, SCAN_RADIUS)
 
             if npc then
                 questNPCRef = npc
                 local npcPart = npc.Parent
-                -- TP direto no NPC
                 if npcPart and npcPart:IsA("BasePart") and npcPart.Position.Y >= SEA_Y then
                     char.HumanoidRootPart.CFrame =
                         CFrame.new(npcPart.Position + Vector3.new(3,1,0))
                     task.wait(0.75)
                 end
-                -- Aceita missão
                 FirePrompt(npc); task.wait(0.5)
                 FirePrompt(npc); task.wait(0.5)
-                Farm.StatusText = ("Lv %d → %s | ✓ Missão aceita!"):format(lv, zone.name)
-                -- Equipa arma se necessário
+                Farm.StatusText = ("Lv %d → %s | ✓ Missão aceita"):format(lv, zone.name)
                 if Farm.Style == "sword" then EquipSword() end
-                -- TP para mobs
                 SafeTP(Farm.Zone.mobPos); task.wait(1.1)
                 Farm.State     = "fighting"
                 Farm.KillCount = 0
                 Farm.Timer     = tick()
             else
-                Farm.StatusText = ("Lv %d → %s | NPC não achado (raio %d)..."):format(
+                Farm.StatusText = ("Lv %d → %s | NPC não achado (r=%d)..."):format(
                     lv, zone.name, SCAN_RADIUS)
-                -- Timeout de 15s: vai para mobs de qualquer forma
-                if tick() - Farm.Timer > 15 then
+                -- timeout 20s: vai lutar mesmo sem missão
+                if tick() - Farm.Timer > 20 then
                     SafeTP(Farm.Zone.mobPos); task.wait(1.1)
                     Farm.State = "fighting"; Farm.Timer = tick()
                 else
@@ -408,22 +478,24 @@ task.spawn(function()
                 end
             end
 
-        -- ── fighting: mata mobs e conta kills ─────────────────
+        -- ── fighting: mob-lock aéreo ──────────────────────────
         elseif Farm.State == "fighting" then
             if tick() - Farm.Timer > QUEST_TIMEOUT then
+                SetCharCollision(true)
                 Farm.State = "returning"; continue
             end
 
-            local mob, dist = NearestMob(Farm.Zone.mobPos, 400)
+            local mob, dist = NearestMob(Farm.Zone.mobPos, 500)
 
             if mob and mob:FindFirstChild("HumanoidRootPart") then
                 local hrp = mob.HumanoidRootPart
-                if hrp.Position.Y < SEA_Y then task.wait(0.5); continue end
+                if hrp.Position.Y < SEA_Y then task.wait(0.3); continue end
 
                 local humBefore = mob:FindFirstChildOfClass("Humanoid")
                 local hpBefore  = humBefore and humBefore.Health or 0
 
-                AttackMob(mob); task.wait(0.18)
+                AttackMobHover(mob)   -- hover acima + ataque
+                task.wait(0.15)
 
                 local humAfter = mob:FindFirstChildOfClass("Humanoid")
                 if not humAfter or humAfter.Health <= 0 then
@@ -431,14 +503,16 @@ task.spawn(function()
                 end
 
                 local curHp = humAfter and math.floor(humAfter.Health) or 0
-                Farm.StatusText = ("Lv %d → %s | Kills: %d/%d | HP mob: %d"):format(
+                Farm.StatusText = ("Lv %d → %s | ✦ Kills: %d/%d | HP: %d"):format(
                     lv, zone.name, Farm.KillCount, Farm.TargetKills, curHp)
 
                 if Farm.KillCount >= Farm.TargetKills then
+                    SetCharCollision(true)
                     Farm.State = "returning"
                 end
             else
-                Farm.StatusText = ("Lv %d → %s | Aguardando respawn... (%d/%d kills)"):format(
+                SetCharCollision(true)
+                Farm.StatusText = ("Lv %d → %s | Aguardando spawn... (%d/%d)"):format(
                     lv, zone.name, Farm.KillCount, Farm.TargetKills)
                 if Farm.KillCount >= Farm.TargetKills then
                     Farm.State = "returning"
@@ -446,10 +520,10 @@ task.spawn(function()
                 task.wait(1.5)
             end
 
-        -- ── returning: entrega missão e reinicia ──────────────
+        -- ── returning ─────────────────────────────────────────
         elseif Farm.State == "returning" then
-            Farm.StatusText = ("Lv %d → %s | Entregando missão..."):format(lv, zone.name)
-
+            SetCharCollision(true)
+            Farm.StatusText = ("Lv %d → %s | Entregando..."):format(lv, zone.name)
             SafeTP(Farm.Zone.islePos); task.wait(1.1)
 
             local retNpc = questNPCRef
@@ -466,9 +540,9 @@ task.spawn(function()
                 end
                 FirePrompt(retNpc); task.wait(0.5)
                 FirePrompt(retNpc); task.wait(0.5)
-                Farm.StatusText = ("Lv %d → %s | ✓ Missão entregue! Reiniciando..."):format(lv, zone.name)
+                Farm.StatusText = ("Lv %d → %s | ✓ Entregue! Reiniciando..."):format(lv, zone.name)
             else
-                Farm.StatusText = ("Lv %d → %s | NPC de entrega não achado"):format(lv, zone.name)
+                Farm.StatusText = ("Lv %d → %s | NPC entrega não achado"):format(lv, zone.name)
             end
 
             task.wait(1.0)
@@ -525,22 +599,21 @@ local function TP_NearestFruit()
 end
 
 local Locations = {
-    ["Ilha Inicial"]      = Vector3.new(-210, 28, 180),
-    ["Base Marinha"]      = Vector3.new(990,  28,-510),
-    ["Ilha Buggy"]        = Vector3.new(402,  28,-1002),
-    ["Ilha da Nami"]      = Vector3.new(1250, 28, 640),
-    ["Arlong Park"]       = Vector3.new(1822, 28, 1492),
-    ["Baratie"]           = Vector3.new(-792, 28, 1242),
-    ["Coliseu"]           = Vector3.new(1622, 28,-872),
-    ["Ilha dos Tubarões"] = Vector3.new(-3052,28, 1978),
-    ["Shanks Island"]     = Vector3.new(-1892,28,-858),
-    ["Mihawk Island"]     = Vector3.new(-2492,28,-312),
-    ["Marineford"]        = Vector3.new(2552, 28,-2058),
-    ["Impel Down"]        = Vector3.new(2820, 28, 1760),
-    ["Skypiea"]           = Vector3.new(-2822,865,-1632),
-    ["Upper Yard"]        = Vector3.new(-3102,882,-1922),
-    ["Sky Coliseu"]       = Vector3.new(-3200,1200,-1600),
-    ["Portal 2º Mar"]     = Vector3.new(2900, 28, 900),
+    ["Starter Island"]   = Vector3.new(-210, 28, 180),
+    ["Pirate Island"]    = Vector3.new(402,  28,-1002),
+    ["Soldier Island"]   = Vector3.new(990,  28,-510),
+    ["Shark Island"]     = Vector3.new(1822, 28, 1492),
+    ["Chef Ship"]        = Vector3.new(-792, 28, 1242),
+    ["Snow Island"]      = Vector3.new(1622, 28,-872),
+    ["Rocks Island"]     = Vector3.new(-1200,28,-500),
+    ["Sand Kingdom"]     = Vector3.new(-3052,28, 1978),
+    ["Sky Island"]       = Vector3.new(-2822,865,-1632),
+    ["Bubble Island"]    = Vector3.new(2552, 28,-2058),
+    ["Lobby Island"]     = Vector3.new(-1892,28,-858),
+    ["Zombie Island"]    = Vector3.new(-2492,28,-312),
+    ["War Island"]       = Vector3.new(2552, 28,-2058),
+    ["Fishland"]         = Vector3.new(-3102,882,-1922),
+    ["Portal 2º Mar"]   = Vector3.new(2900, 28, 900),
 }
 
 -- ============================================================
@@ -589,13 +662,11 @@ local function List(p, dir, pad, ha, va)
     return l
 end
 
--- Janela
 local WIN = Instance.new("Frame", SG)
 WIN.Size=UDim2.new(0,650,0,490); WIN.Position=UDim2.new(0.5,-325,0.5,-245)
 WIN.BackgroundColor3=C.bg; WIN.BorderSizePixel=0
 Corner(WIN, 10); Stroke(WIN, C.border, 1.5)
 
--- TopBar
 local TopBar = Instance.new("Frame", WIN)
 TopBar.Size=UDim2.new(1,0,0,44); TopBar.BackgroundColor3=C.sidebar; TopBar.BorderSizePixel=0
 Corner(TopBar, 10)
@@ -620,7 +691,6 @@ end
 local CloseBtn = WinBtn("✕", C.red,                      -8)
 local MinBtn   = WinBtn("−", Color3.fromRGB(50,100,180), -42)
 
--- drag
 local dragging, dInput, dStart, dPos
 TopBar.InputBegan:Connect(function(inp)
     if inp.UserInputType==Enum.UserInputType.MouseButton1 then
@@ -641,7 +711,7 @@ UserInputService.InputChanged:Connect(function(inp)
 end)
 
 CloseBtn.MouseButton1Click:Connect(function()
-    Farm.Active=false; AutoAttack=false; SG:Destroy()
+    Farm.Active=false; AutoAttack=false; SetCharCollision(true); SG:Destroy()
 end)
 local minimized=false
 MinBtn.MouseButton1Click:Connect(function()
@@ -653,7 +723,6 @@ MinBtn.MouseButton1Click:Connect(function()
     MinBtn.Text=minimized and "+" or "−"
 end)
 
--- Layout sidebar + content
 local Layout = Instance.new("Frame", WIN)
 Layout.Position=UDim2.new(0,0,0,44); Layout.Size=UDim2.new(1,0,1,-44)
 Layout.BackgroundTransparency=1
@@ -742,37 +811,33 @@ for _, def in ipairs(TabDefs) do
     btn.Name=def.label; btn.Size=UDim2.new(1,0,0,36)
     btn.BackgroundTransparency=1; btn.Text=""; btn.LayoutOrder=def.order+1
     Corner(btn, 6)
-
     local iconL = Instance.new("TextLabel", btn)
     iconL.Size=UDim2.new(0,24,1,0); iconL.Position=UDim2.new(0,8,0,0)
     iconL.BackgroundTransparency=1; iconL.Text=def.icon; iconL.TextSize=14
     iconL.Font=Enum.Font.GothamBold; iconL.TextColor3=C.textDim
     iconL.TextXAlignment=Enum.TextXAlignment.Center
-
     local nameL = Instance.new("TextLabel", btn)
     nameL.Size=UDim2.new(1,-38,1,0); nameL.Position=UDim2.new(0,36,0,0)
     nameL.BackgroundTransparency=1; nameL.Text=def.label; nameL.TextColor3=C.textDim
     nameL.TextSize=12; nameL.Font=Enum.Font.GothamBold
     nameL.TextXAlignment=Enum.TextXAlignment.Left
-
     local adot = Instance.new("Frame", btn)
     adot.Name="ActiveDot"; adot.Size=UDim2.new(0,3,0.6,0); adot.Position=UDim2.new(0,0,0.2,0)
     adot.BackgroundColor3=C.accent2; adot.BorderSizePixel=0; adot.Visible=false
     Corner(adot, 2)
-
     TabBtns[def.label]=btn
     btn.MouseButton1Click:Connect(function() SwitchTab(def.label) end)
 end
 
--- ── UI helpers ───────────────────────────────────────────────
+-- ============================================================
+--  UI HELPERS
+-- ============================================================
 local function Section(parent, text)
     local row = Instance.new("Frame", parent)
     row.Size=UDim2.new(1,0,0,24); row.BackgroundTransparency=1
-
     local line = Instance.new("Frame", row)
     line.Size=UDim2.new(1,0,0,1); line.Position=UDim2.new(0,0,0.5,8)
     line.BackgroundColor3=C.sep; line.BorderSizePixel=0
-
     local lbl = Instance.new("TextLabel", row)
     lbl.Size=UDim2.new(0,0,1,0); lbl.AutomaticSize=Enum.AutomaticSize.X
     lbl.BackgroundColor3=C.panel; lbl.BackgroundTransparency=0
@@ -784,24 +849,20 @@ local function Toggle(parent, text, default, cb)
     local row = Instance.new("Frame", parent)
     row.Size=UDim2.new(1,0,0,36); row.BackgroundColor3=C.card; row.BorderSizePixel=0
     Corner(row, 6)
-
     local lbl = Instance.new("TextLabel", row)
     lbl.Size=UDim2.new(1,-68,1,0); lbl.Position=UDim2.new(0,12,0,0)
     lbl.BackgroundTransparency=1; lbl.Text=text; lbl.TextColor3=C.text
     lbl.TextSize=12; lbl.Font=Enum.Font.Gotham; lbl.TextXAlignment=Enum.TextXAlignment.Left
-
     local pill = Instance.new("TextButton", row)
     pill.Size=UDim2.new(0,46,0,22); pill.Position=UDim2.new(1,-56,0.5,-11)
     pill.Text=""; pill.BorderSizePixel=0
     local state = default or false
     pill.BackgroundColor3=state and C.green or Color3.fromRGB(55,55,70)
     Corner(pill, 11)
-
     local thumb = Instance.new("Frame", pill)
     thumb.Size=UDim2.new(0,16,0,16)
     thumb.Position=state and UDim2.new(1,-20,0.5,-8) or UDim2.new(0,4,0.5,-8)
     thumb.BackgroundColor3=Color3.new(1,1,1); thumb.BorderSizePixel=0; Corner(thumb, 8)
-
     local function SetState(v)
         state=v
         TweenService:Create(pill,TweenInfo.new(0.15),{BackgroundColor3=v and C.green or Color3.fromRGB(55,55,70)}):Play()
@@ -855,7 +916,6 @@ end
 -- ============================================================
 do
     local pg = Pages["Home"]
-
     local banner = Instance.new("Frame", pg)
     banner.Size=UDim2.new(1,0,0,88); banner.BackgroundColor3=C.card; banner.BorderSizePixel=0
     Corner(banner, 10); Stroke(banner, C.accent, 1.5)
@@ -864,20 +924,17 @@ do
         ColorSequenceKeypoint.new(0,Color3.fromRGB(40,20,90)),
         ColorSequenceKeypoint.new(1,Color3.fromRGB(15,15,30))}
     grad.Rotation=135
-
     local banT = Instance.new("TextLabel", banner)
     banT.Size=UDim2.new(1,-20,0,34); banT.Position=UDim2.new(0,14,0,10)
     banT.BackgroundTransparency=1; banT.Text="⚔  China Hub Free"
     banT.TextColor3=Color3.new(1,1,1); banT.TextSize=18; banT.Font=Enum.Font.GothamBold
     banT.TextXAlignment=Enum.TextXAlignment.Left
-
     local banS = Instance.new("TextLabel", banner)
     banS.Size=UDim2.new(1,-20,0,20); banS.Position=UDim2.new(0,14,0,50)
-    banS.BackgroundTransparency=1; banS.Text="King Legacy v10.2-Sea1  |  Build v4.1"
+    banS.BackgroundTransparency=1; banS.Text="King Legacy Update 10  |  Build v4.2"
     banS.TextColor3=C.textDim; banS.TextSize=11; banS.Font=Enum.Font.Gotham
     banS.TextXAlignment=Enum.TextXAlignment.Left
 
-    -- Info cards
     local infoRow = Instance.new("Frame", pg)
     infoRow.Size=UDim2.new(1,0,0,56); infoRow.BackgroundTransparency=1
     local iList = List(infoRow, Enum.FillDirection.Horizontal, 8)
@@ -913,14 +970,14 @@ do
     end)
 
     Section(pg, "Sobre")
-    Label(pg, "  Auto Farm com scan automático de NPC de Missão.")
-    Label(pg, "  Suporte a Melee, Sword e Fruit.")
-    Label(pg, "  Calibre as zonas se o TP for para lugar errado.")
+    Label(pg, "  Mob-Lock Aéreo: personagem fica acima do NPC.")
+    Label(pg, "  Zonas corretas: Starter→Pirate→Soldier→Shark→Chef→Snow→Sand→Sky...")
+    Label(pg, "  Calibre islePos/mobPos se o TP for para lugar errado.")
     Label(pg, "  Tecla "..tostring(Cfg.HideKey).." — ocultar/mostrar.")
 end
 
 -- ============================================================
---  FARM
+--  FARM — sem auto-ataque, com hover height
 -- ============================================================
 do
     local pg = Pages["Farm"]
@@ -929,17 +986,14 @@ do
     local statusF = Instance.new("Frame", pg)
     statusF.Size=UDim2.new(1,0,0,46); statusF.BackgroundColor3=Color3.fromRGB(14,24,18)
     statusF.BorderSizePixel=0; Corner(statusF, 8); Stroke(statusF, Color3.fromRGB(30,90,50), 1)
-
     local statusDot = Instance.new("Frame", statusF)
     statusDot.Size=UDim2.new(0,8,0,8); statusDot.Position=UDim2.new(0,10,0.5,-4)
     statusDot.BackgroundColor3=C.red; statusDot.BorderSizePixel=0; Corner(statusDot, 4)
-
     local statusLbl = Instance.new("TextLabel", statusF)
     statusLbl.Size=UDim2.new(1,-28,1,0); statusLbl.Position=UDim2.new(0,24,0,0)
     statusLbl.BackgroundTransparency=1; statusLbl.Text="Estado: inativo"
     statusLbl.TextColor3=C.green; statusLbl.TextSize=11; statusLbl.Font=Enum.Font.GothamBold
     statusLbl.TextXAlignment=Enum.TextXAlignment.Left
-
     task.spawn(function()
         while SG.Parent do
             task.wait(0.8)
@@ -949,16 +1003,17 @@ do
     end)
 
     Section(pg, "Auto Farm")
-    Toggle(pg, "🗺  Auto Farm Level (Quest)", false, function(v)
-        Farm.Active=v; if not v then Farm.State="idle" end
-    end)
-    Toggle(pg, "👊  Auto Ataque (ataque livre)", false, function(v)
-        AutoAttack=v
+    Toggle(pg, "🗺  Auto Farm Level (Quest + Mob-Lock)", false, function(v)
+        Farm.Active=v
+        if not v then
+            Farm.State="idle"
+            SetCharCollision(true)
+        end
     end)
 
     -- ── SELETOR DE ESTILO ───────────────────────────────────
     Section(pg, "🎮 Estilo de Luta")
-    Label(pg, "  Escolha o estilo de combate para o farm:")
+    Label(pg, "  Escolha o estilo de combate:")
 
     local styleRow = Instance.new("Frame", pg)
     styleRow.Size=UDim2.new(1,0,0,42); styleRow.BackgroundTransparency=1
@@ -991,34 +1046,30 @@ do
         btn.BackgroundColor3 = st.key=="melee" and C.accent or C.card
         btn.BorderSizePixel=0; Corner(btn, 8)
         if st.key~="melee" then Stroke(btn, C.border, 1) end
-
         local iconL = Instance.new("TextLabel", btn)
         iconL.Size=UDim2.new(1,0,0,22); iconL.Position=UDim2.new(0,0,0,4)
         iconL.BackgroundTransparency=1; iconL.Text=st.icon; iconL.TextSize=16
         iconL.Font=Enum.Font.GothamBold
         iconL.TextColor3=st.key=="melee" and Color3.new(1,1,1) or C.textDim
         iconL.TextXAlignment=Enum.TextXAlignment.Center
-
         local nameL = Instance.new("TextLabel", btn)
         nameL.Size=UDim2.new(1,0,0,16); nameL.Position=UDim2.new(0,0,0,24)
         nameL.BackgroundTransparency=1; nameL.Text=st.label; nameL.TextSize=11
         nameL.Font=st.key=="melee" and Enum.Font.GothamBold or Enum.Font.Gotham
         nameL.TextColor3=st.key=="melee" and Color3.new(1,1,1) or C.textDim
         nameL.TextXAlignment=Enum.TextXAlignment.Center
-
         table.insert(styleButtons, {key=st.key, btn=btn, iconL=iconL, nameL=nameL})
         btn.MouseButton1Click:Connect(function() SetStyle(st.key) end)
     end
 
-    -- Descrição do estilo
     local styleDesc = Instance.new("TextLabel", pg)
     styleDesc.Size=UDim2.new(1,0,0,16); styleDesc.BackgroundTransparency=1
     styleDesc.TextColor3=C.textDim; styleDesc.TextSize=10; styleDesc.Font=Enum.Font.Gotham
     styleDesc.TextXAlignment=Enum.TextXAlignment.Left
     local styleDescs = {
-        melee = "  🥊 Melee: soco padrão (M1)",
-        sword = "  ⚔️ Sword: equipa espada/katana do backpack + M1",
-        fruit = "  🍎 Fruit: pressiona Z para habilidade (fallback: M1)",
+        melee = "  🥊 Melee: M1 de cima (hover aéreo)",
+        sword = "  ⚔️ Sword: equipa espada + M1 de cima",
+        fruit = "  🍎 Fruit: Z/X de cima (fallback M1)",
     }
     task.spawn(function()
         while SG.Parent do
@@ -1026,8 +1077,14 @@ do
         end
     end)
 
-    -- Kills por ciclo
+    -- Hover height
     Section(pg, "⚙️ Configurações")
+    Label(pg, "  Altura acima do mob (studs, padrão: 12):")
+    local hoverIn = Input(pg, "12", function(v)
+        local n=tonumber(v); if n and n>0 then Farm.HoverHeight=math.floor(n) end
+    end)
+    hoverIn.Text="12"
+
     Label(pg, "  Mobs para matar antes de entregar missão:")
     local killIn = Input(pg, "10", function(v)
         local n=tonumber(v); if n and n>0 then Farm.TargetKills=math.floor(n) end
@@ -1037,17 +1094,14 @@ do
     -- Calibrar zonas
     Section(pg, "📍 Calibrar Zonas")
     Label(pg, "  Vá até o ponto e clique calibrar para corrigir TP.")
-
     local selIdx=1
     local selLbl = Instance.new("TextLabel", pg)
     selLbl.Size=UDim2.new(1,0,0,28); selLbl.BackgroundColor3=C.card; selLbl.BorderSizePixel=0
     selLbl.Text="Zona: "..QuestZones[1].name; selLbl.TextColor3=C.accent2
     selLbl.TextSize=11; selLbl.Font=Enum.Font.GothamBold; Corner(selLbl, 6)
-
     local arrowRow = Instance.new("Frame", pg)
     arrowRow.Size=UDim2.new(1,0,0,32); arrowRow.BackgroundTransparency=1
     List(arrowRow, Enum.FillDirection.Horizontal, 6)
-
     local function ArrowBtn(t, cb2)
         local b=Instance.new("TextButton", arrowRow)
         b.Size=UDim2.new(0.5,-3,1,0); b.BackgroundColor3=C.card
@@ -1061,8 +1115,7 @@ do
     ArrowBtn("Próxima ►", function()
         selIdx=math.min(#QuestZones,selIdx+1); selLbl.Text="Zona: "..QuestZones[selIdx].name
     end)
-
-    Button(pg, "📍 Calibrar islePos (centro da ilha)", function()
+    Button(pg, "📍 Calibrar islePos (centro da ilha / NPC)", function()
         local c=LP.Character; if not c or not c:FindFirstChild("HumanoidRootPart") then return end
         local pos=c.HumanoidRootPart.Position
         QuestZones[selIdx].islePos=pos
@@ -1079,7 +1132,7 @@ do
 
     Section(pg, "Zonas de Quest")
     for _, z in ipairs(QuestZones) do
-        Label(pg, ("  Lv %3d–%-3d  →  %s"):format(z.minLv,z.maxLv,z.name))
+        Label(pg, ("  Lv %4d–%-4d → %s"):format(z.minLv,z.maxLv,z.name))
     end
 end
 
@@ -1138,17 +1191,13 @@ end
 -- ============================================================
 do
     local pg = Pages["Ilhas"]
-    Section(pg,"🏝 Sea 1")
+    Section(pg,"🏝 Sea 1 — First Sea")
     for _,name in ipairs({
-        "Ilha Inicial","Base Marinha","Ilha Buggy","Ilha da Nami","Arlong Park",
-        "Baratie","Coliseu","Ilha dos Tubarões","Shanks Island","Mihawk Island",
-        "Marineford","Impel Down"
+        "Starter Island","Pirate Island","Soldier Island","Shark Island",
+        "Chef Ship","Snow Island","Rocks Island","Sand Kingdom",
+        "Sky Island","Bubble Island","Lobby Island","Zombie Island",
+        "War Island","Fishland"
     }) do
-        local p=Locations[name]
-        if p then Button(pg,"→ "..name,function() TP(p) end) end
-    end
-    Section(pg,"☁ Sky Islands")
-    for _,name in ipairs({"Skypiea","Upper Yard","Sky Coliseu"}) do
         local p=Locations[name]
         if p then Button(pg,"→ "..name,function() TP(p) end) end
     end
@@ -1157,10 +1206,14 @@ do
 end
 
 -- ============================================================
---  MISC
+--  MISC — auto-ataque movido para cá
 -- ============================================================
 do
     local pg = Pages["Misc"]
+    Section(pg,"Combate")
+    Toggle(pg,"👊  Auto Ataque (ataque livre + hover)", false, function(v)
+        AutoAttack=v
+    end)
     Section(pg,"Movimentação")
     Toggle(pg,"👻  No Clip",false,function(v)
         local c=LP.Character
@@ -1201,7 +1254,10 @@ do
             setclipboard(("%.1f, %.1f, %.1f"):format(p.X,p.Y,p.Z))
         end
     end)
-    Button(pg,"🔁 Recarregar Personagem",function() LP:LoadCharacter() end)
+    Button(pg,"🔁 Recarregar Personagem",function()
+        SetCharCollision(true); LP:LoadCharacter()
+    end)
+    Button(pg,"🔧 Restaurar Colisão",function() SetCharCollision(true) end)
 end
 
 -- ============================================================
@@ -1338,6 +1394,7 @@ for _,pl in ipairs(Players:GetPlayers()) do MakePlayerESP(pl) end
 Players.PlayerAdded:Connect(function(pl) task.wait(1); MakePlayerESP(pl) end)
 Players.PlayerRemoving:Connect(KillPlayerESP)
 LP.CharacterAdded:Connect(function()
+    SetCharCollision(true)
     Farm.State="idle"; task.wait(0.5)
     for _,pl in ipairs(Players:GetPlayers()) do MakePlayerESP(pl) end
 end)
@@ -1348,4 +1405,4 @@ RunService.RenderStepped:Connect(function()
     if t2%14==0 then UpdateFruitESP(); t2=0 end
 end)
 
-print("[China Hub Free v4.1] Carregado — "..LP.Name)
+print("[China Hub Free v4.2] Carregado — "..LP.Name)
