@@ -4,7 +4,6 @@
 --  Sea Events | Kill Aura | Auto Stats | Auto Haki
 --  ESP Players/Fruits/Bosses | Fruit Notifier + Discord Webhook
 --  Server Hop | Hitbox Expand | Fly Mode
---  Background Paisagem (OMG Hub Style)
 -- ============================================================
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
@@ -836,82 +835,6 @@ SG.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
 SG.IgnoreGuiInset=true; SG.Parent=CoreGui
 
 -- ============================================================
---  BACKGROUND PAISAGEM (OMG Hub Style)
---  Ocean/sea landscape + dark cinematic overlay
--- ============================================================
-local BGFrame = Instance.new("Frame", SG)
-BGFrame.Size       = UDim2.new(1,0,1,0)
-BGFrame.Position   = UDim2.new(0,0,0,0)
-BGFrame.BackgroundColor3 = Color3.fromRGB(3,5,18)
-BGFrame.BorderSizePixel  = 0
-BGFrame.ZIndex = 0
-
--- Imagem de paisagem (oceano/One Piece style)
--- rbxassetid://6031075938 = ocean sunrise landscape
-local BG_Img = Instance.new("ImageLabel", BGFrame)
-BG_Img.Size             = UDim2.new(1,0,1,0)
-BG_Img.Position         = UDim2.new(0,0,0,0)
-BG_Img.Image            = "rbxassetid://6031075938"
-BG_Img.ImageTransparency= 0.22
-BG_Img.BackgroundTransparency = 1
-BG_Img.ScaleType        = Enum.ScaleType.Crop
-BG_Img.ZIndex           = 1
-
--- Overlay gradiente cinematográfico (topo e base escuros)
-local BG_Overlay = Instance.new("Frame", BGFrame)
-BG_Overlay.Size             = UDim2.new(1,0,1,0)
-BG_Overlay.BackgroundColor3 = Color3.fromRGB(0,0,8)
-BG_Overlay.BackgroundTransparency = 0.35
-BG_Overlay.BorderSizePixel  = 0
-BG_Overlay.ZIndex = 2
-
-local ovG = Instance.new("UIGradient", BG_Overlay)
-ovG.Color = ColorSequence.new{
-    ColorSequenceKeypoint.new(0,   Color3.fromRGB(0,0,0)),
-    ColorSequenceKeypoint.new(0.3, Color3.fromRGB(2,0,10)),
-    ColorSequenceKeypoint.new(0.7, Color3.fromRGB(2,0,10)),
-    ColorSequenceKeypoint.new(1,   Color3.fromRGB(0,0,0)),
-}
-ovG.Transparency = NumberSequence.new{
-    NumberSequenceKeypoint.new(0,   0.0),
-    NumberSequenceKeypoint.new(0.25,0.55),
-    NumberSequenceKeypoint.new(0.75,0.55),
-    NumberSequenceKeypoint.new(1,   0.0),
-}
-ovG.Rotation = 90
-
--- Scan lines sutil para efeito cinematográfico
-local scanLines = Instance.new("Frame", BGFrame)
-scanLines.Size             = UDim2.new(1,0,1,0)
-scanLines.BackgroundTransparency = 1
-scanLines.BorderSizePixel  = 0
-scanLines.ZIndex = 3
-
--- Vinheta nas bordas
-local vignette = Instance.new("ImageLabel", BGFrame)
-vignette.Size             = UDim2.new(1,0,1,0)
-vignette.Image            = "rbxassetid://7657112680"
-vignette.ImageColor3      = Color3.fromRGB(0,0,0)
-vignette.ImageTransparency= 0.4
-vignette.BackgroundTransparency=1
-vignette.ScaleType        = Enum.ScaleType.Stretch
-vignette.ZIndex = 4
-
--- Animação suave de parallax no fundo
-task.spawn(function()
-    local t = 0
-    while SG.Parent do
-        task.wait(0.016)
-        t = t + 0.0003
-        -- drift suave horizontal
-        local dx = math.sin(t) * 0.008
-        local dy = math.cos(t * 0.6) * 0.004
-        BG_Img.Position = UDim2.new(dx, 0, dy, 0)
-        BG_Img.Size     = UDim2.new(1 - dx * 2, 0, 1 - dy * 2, 0)
-    end
-end)
-
--- ============================================================
 --  PALETA DE CORES (OMG Hub Dark Ocean)
 -- ============================================================
 local C = {
@@ -941,11 +864,11 @@ local function Pad(p,l,r,t,b) local x=Instance.new("UIPadding",p); x.PaddingLeft
 local function Lst(p,dir,sp,ha) local l=Instance.new("UIListLayout",p); l.FillDirection=dir or Enum.FillDirection.Vertical; l.Padding=UDim.new(0,sp or 6); l.HorizontalAlignment=ha or Enum.HorizontalAlignment.Left; return l end
 
 -- ============================================================
---  JANELA PRINCIPAL — levemente transparente para ver o fundo
+--  JANELA PRINCIPAL — sólida, sem fundo de imagem
 -- ============================================================
 local WIN = Instance.new("Frame", SG)
 WIN.Size=UDim2.new(0,710,0,550); WIN.Position=UDim2.new(0.5,-355,0.5,-275)
-WIN.BackgroundColor3=C.bg; WIN.BackgroundTransparency=0.06  -- fundo aparece sutilmente
+WIN.BackgroundColor3=C.bg; WIN.BackgroundTransparency=0
 WIN.BorderSizePixel=0; Rnd(WIN,14); WIN.ZIndex=5
 
 -- glow azul oceano nas bordas
@@ -971,7 +894,7 @@ shadow.BorderSizePixel=0; Rnd(shadow,16); shadow.ZIndex=4
 -- ============================================================
 local Top = Instance.new("Frame",WIN)
 Top.Size=UDim2.new(1,0,0,52); Top.BackgroundColor3=C.side
-Top.BackgroundTransparency=0.05; Top.BorderSizePixel=0; Rnd(Top,14); Top.ZIndex=6
+Top.BackgroundTransparency=0; Top.BorderSizePixel=0; Rnd(Top,14); Top.ZIndex=6
 
 -- acento azul embaixo do topbar
 local TopLine = Instance.new("Frame",Top)
@@ -1004,7 +927,7 @@ SLbl.BackgroundTransparency=1; SLbl.Text="King Legacy  v7.0  |  Update 11  |  Ha
 SLbl.TextColor3=C.acc2; SLbl.TextSize=10; SLbl.Font=Enum.Font.Gotham
 SLbl.TextXAlignment=Enum.TextXAlignment.Left; SLbl.ZIndex=7
 
--- badge "NEW"
+-- badge "UPD11"
 local badge=Instance.new("TextLabel",Top)
 badge.Size=UDim2.new(0,38,0,16); badge.Position=UDim2.new(0,220,0,33)
 badge.BackgroundColor3=Color3.fromRGB(220,55,55); badge.Text="UPD11"; badge.TextColor3=Color3.new(1,1,1)
@@ -1036,18 +959,24 @@ UserInputService.InputChanged:Connect(function(i)
         shadow.Position=UDim2.new(dP.X.Scale,dP.X.Offset+d.X-10,dP.Y.Scale,dP.Y.Offset+d.Y-10)
     end
 end)
+
 CBtn.MouseButton1Click:Connect(function()
     Farm.Active=false; BossConfig.Active=false; DungeonConfig.Active=false
     SeaEvent.Active=false; AutoStats.Active=false; FruitNotifier.Active=false
     SetCollision(true); SetFly(false); SetHitbox(false,10)
     SG:Destroy(); shadow:Destroy()
 end)
+
+-- minimizar: colapsa conteúdo, deixa só topbar
 local mini=false
 MBtn.MouseButton1Click:Connect(function()
     mini=not mini
-    for _,c in ipairs(WIN:GetChildren()) do if c~=Top then c.Visible=not mini end end
-    WIN.Size=mini and UDim2.new(0,710,0,52) or UDim2.new(0,710,0,550)
-    shadow.Visible=not mini; MBtn.Text=mini and "+" or "−"
+    for _,c in ipairs(WIN:GetChildren()) do
+        if c ~= Top then c.Visible = not mini end
+    end
+    WIN.Size = mini and UDim2.new(0,710,0,52) or UDim2.new(0,710,0,550)
+    shadow.Visible = not mini
+    MBtn.Text = mini and "+" or "−"
 end)
 
 -- ============================================================
@@ -1060,13 +989,13 @@ Layout.BackgroundTransparency=1; Layout.ZIndex=6
 -- sidebar
 local SB = Instance.new("Frame",Layout)
 SB.Size=UDim2.new(0,162,1,0); SB.BackgroundColor3=C.side
-SB.BackgroundTransparency=0.05; SB.BorderSizePixel=0; SB.ZIndex=7
+SB.BackgroundTransparency=0; SB.BorderSizePixel=0; SB.ZIndex=7
 Lst(SB,Enum.FillDirection.Vertical,0); Pad(SB,0,0,8,8)
 
 -- user card
 local UC = Instance.new("Frame",SB)
 UC.Size=UDim2.new(1,0,0,64); UC.BackgroundColor3=C.card
-UC.BackgroundTransparency=0.1; UC.BorderSizePixel=0; UC.LayoutOrder=0; UC.ZIndex=8
+UC.BackgroundTransparency=0; UC.BorderSizePixel=0; UC.LayoutOrder=0; UC.ZIndex=8
 local ucBar=Instance.new("Frame",UC)
 ucBar.Size=UDim2.new(0,3,0.6,0); ucBar.Position=UDim2.new(0,0,0.2,0)
 ucBar.BackgroundColor3=C.acc; ucBar.BorderSizePixel=0; ucBar.ZIndex=9
@@ -1094,7 +1023,7 @@ sdiv.BorderSizePixel=0; sdiv.LayoutOrder=1; sdiv.ZIndex=8
 -- content area
 local Con = Instance.new("Frame",Layout)
 Con.Position=UDim2.new(0,162,0,0); Con.Size=UDim2.new(1,-162,1,0)
-Con.BackgroundColor3=C.panel; Con.BackgroundTransparency=0.06
+Con.BackgroundColor3=C.panel; Con.BackgroundTransparency=0
 Con.BorderSizePixel=0; Con.ZIndex=7
 
 local CS = Instance.new("ScrollingFrame",Con)
@@ -1174,7 +1103,7 @@ end
 
 local function Tog(p,t,def,cb)
     local row=Instance.new("Frame",p); row.Size=UDim2.new(1,0,0,38)
-    row.BackgroundColor3=C.card; row.BackgroundTransparency=0.05
+    row.BackgroundColor3=C.card; row.BackgroundTransparency=0
     row.BorderSizePixel=0; Rnd(row,7); row.ZIndex=10
     local lbl=Instance.new("TextLabel",row)
     lbl.Size=UDim2.new(1,-68,1,0); lbl.Position=UDim2.new(0,12,0,0)
@@ -1200,7 +1129,7 @@ end
 local function Btn(p,t,cb,acc,colOverride)
     local bgC=colOverride or (acc and C.acc or C.card)
     local b=Instance.new("TextButton",p); b.Size=UDim2.new(1,0,0,36)
-    b.BackgroundColor3=bgC; b.BackgroundTransparency=0.05
+    b.BackgroundColor3=bgC; b.BackgroundTransparency=0
     b.Text=t; b.TextColor3=C.text; b.TextSize=11; b.Font=Enum.Font.GothamBold
     b.BorderSizePixel=0; Rnd(b,7); b.ZIndex=10
     if not acc and not colOverride then Str(b,C.bord,1) end
@@ -1216,7 +1145,7 @@ end
 
 local function Inp(p,hint,cb)
     local b=Instance.new("TextBox",p); b.Size=UDim2.new(1,0,0,32)
-    b.BackgroundColor3=C.card; b.BackgroundTransparency=0.05
+    b.BackgroundColor3=C.card; b.BackgroundTransparency=0
     b.Text=""; b.PlaceholderText=hint; b.PlaceholderColor3=C.dim; b.TextColor3=C.text
     b.TextSize=11; b.Font=Enum.Font.Gotham; b.BorderSizePixel=0; b.ClearTextOnFocus=false
     Rnd(b,7); Str(b,C.bord,1); Pad(b,10,10,0,0); b.ZIndex=10
@@ -1231,7 +1160,7 @@ end
 
 local function StatusBar(p)
     local sf=Instance.new("Frame",p); sf.Size=UDim2.new(1,0,0,42)
-    sf.BackgroundColor3=Color3.fromRGB(8,16,12); sf.BackgroundTransparency=0.05
+    sf.BackgroundColor3=Color3.fromRGB(8,16,12); sf.BackgroundTransparency=0
     sf.BorderSizePixel=0; Rnd(sf,8); Str(sf,Color3.fromRGB(20,60,36),1); sf.ZIndex=10
     local sd=Instance.new("Frame",sf); sd.Size=UDim2.new(0,8,0,8)
     sd.Position=UDim2.new(0,12,0.5,-4); sd.BackgroundColor3=C.red
@@ -1259,7 +1188,7 @@ local function StyleRow(p,def,cb)
     for _,st in ipairs(stList) do
         local b=Instance.new("TextButton",sRow); b.Size=UDim2.new(0,100,1,0); b.Text=""; b.BorderSizePixel=0
         b.BackgroundColor3=(st[1]==def) and C.acc or C.card
-        b.BackgroundTransparency=0.05; Rnd(b,7); b.ZIndex=11
+        b.BackgroundTransparency=0; Rnd(b,7); b.ZIndex=11
         if st[1]~=def then Str(b,C.bord,1) end
         local l=Instance.new("TextLabel",b); l.Size=UDim2.new(1,0,1,0); l.BackgroundTransparency=1
         l.Text=st[2]; l.TextSize=10; l.TextXAlignment=Enum.TextXAlignment.Center
@@ -1303,7 +1232,7 @@ do
     Lbl(pg,"  Vá até o ponto e clique calibrar.")
     local selIdx=1
     local selL=Instance.new("TextLabel",pg)
-    selL.Size=UDim2.new(1,0,0,30); selL.BackgroundColor3=C.card; selL.BackgroundTransparency=0.05
+    selL.Size=UDim2.new(1,0,0,30); selL.BackgroundColor3=C.card; selL.BackgroundTransparency=0
     selL.BorderSizePixel=0; Rnd(selL,6); Pad(selL,10,0,0,0); selL.ZIndex=10
     selL.Text=Zones[1].name.."  Lv "..Zones[1].minLv.."-"..Zones[1].maxLv
     selL.TextColor3=C.acc2; selL.TextSize=11; selL.Font=Enum.Font.GothamBold
@@ -1313,7 +1242,7 @@ do
     Lst(aRow,Enum.FillDirection.Horizontal,6)
     local function ABtn(t,cb2)
         local b=Instance.new("TextButton",aRow); b.Size=UDim2.new(0.5,-3,1,0)
-        b.BackgroundColor3=C.card; b.BackgroundTransparency=0.05; b.Text=t; b.TextColor3=C.text
+        b.BackgroundColor3=C.card; b.BackgroundTransparency=0; b.Text=t; b.TextColor3=C.text
         b.TextSize=11; b.Font=Enum.Font.GothamBold; b.BorderSizePixel=0; Rnd(b,6); Str(b,C.bord,1); b.ZIndex=11
         b.MouseButton1Click:Connect(cb2)
     end
@@ -1356,7 +1285,7 @@ do
     Sec(pg,"👑  AUTO BOSS — Update 11 Halloween")
     local deathFrame=Instance.new("Frame",pg)
     deathFrame.Size=UDim2.new(1,0,0,42); deathFrame.BackgroundColor3=Color3.fromRGB(18,8,8)
-    deathFrame.BackgroundTransparency=0.05; deathFrame.BorderSizePixel=0; Rnd(deathFrame,8)
+    deathFrame.BackgroundTransparency=0; deathFrame.BorderSizePixel=0; Rnd(deathFrame,8)
     Str(deathFrame,Color3.fromRGB(100,25,25),1.5); deathFrame.ZIndex=10
     local deathLbl=Instance.new("TextLabel",deathFrame)
     deathLbl.Size=UDim2.new(1,0,1,0); deathLbl.BackgroundTransparency=1
@@ -1369,7 +1298,7 @@ do
     Sec(pg,"SELECIONAR BOSS")
     for _,b in ipairs(BossList) do
         local row=Instance.new("Frame",pg); row.Size=UDim2.new(1,0,0,38)
-        row.BackgroundColor3=C.card; row.BackgroundTransparency=0.05
+        row.BackgroundColor3=C.card; row.BackgroundTransparency=0
         row.BorderSizePixel=0; Rnd(row,7); row.ZIndex=10
         if b.name=="Death King" then Str(row,Color3.fromRGB(100,25,25),1.5) end
         local lbl=Instance.new("TextLabel",row)
@@ -1418,11 +1347,11 @@ do
         local row=Instance.new("Frame",pg); row.Size=UDim2.new(1,0,0,32); row.BackgroundTransparency=1; row.ZIndex=10
         Lst(row,Enum.FillDirection.Horizontal,6)
         local posL=Instance.new("TextLabel",row); posL.Size=UDim2.new(0.6,0,1,0)
-        posL.BackgroundColor3=C.card; posL.BackgroundTransparency=0.05; posL.Text="Não calibrado"
+        posL.BackgroundColor3=C.card; posL.BackgroundTransparency=0; posL.Text="Não calibrado"
         posL.TextColor3=C.dim; posL.TextSize=10; posL.Font=Enum.Font.Gotham
         posL.TextXAlignment=Enum.TextXAlignment.Center; posL.BorderSizePixel=0; Rnd(posL,6); posL.ZIndex=11
         local calBtn=Instance.new("TextButton",row)
-        calBtn.Size=UDim2.new(0.4,-6,1,0); calBtn.BackgroundColor3=C.acc; calBtn.BackgroundTransparency=0.05
+        calBtn.Size=UDim2.new(0.4,-6,1,0); calBtn.BackgroundColor3=C.acc; calBtn.BackgroundTransparency=0
         calBtn.Text="CALIBRAR"; calBtn.TextColor3=C.text; calBtn.TextSize=10
         calBtn.Font=Enum.Font.GothamBold; calBtn.BorderSizePixel=0; Rnd(calBtn,6); calBtn.ZIndex=11
         local dk=d.key
@@ -1470,7 +1399,7 @@ end
 do
     local pg=Pages["FRUTAS"]
     local sf=Instance.new("Frame",pg); sf.Size=UDim2.new(1,0,0,42)
-    sf.BackgroundColor3=Color3.fromRGB(14,12,6); sf.BackgroundTransparency=0.05
+    sf.BackgroundColor3=Color3.fromRGB(14,12,6); sf.BackgroundTransparency=0
     sf.BorderSizePixel=0; Rnd(sf,8); Str(sf,Color3.fromRGB(80,70,15),1); sf.ZIndex=10
     local sd=Instance.new("Frame",sf); sd.Size=UDim2.new(0,8,0,8)
     sd.Position=UDim2.new(0,12,0.5,-4); sd.BackgroundColor3=C.red; sd.BorderSizePixel=0; Rnd(sd,4); sd.ZIndex=11
@@ -1670,7 +1599,7 @@ do
 
     Sec(pg,"SERVIDOR ATUAL")
     local jbl=Instance.new("TextLabel",pg); jbl.Size=UDim2.new(1,0,0,30)
-    jbl.BackgroundColor3=C.card; jbl.BackgroundTransparency=0.05; jbl.Text=tostring(game.JobId)
+    jbl.BackgroundColor3=C.card; jbl.BackgroundTransparency=0; jbl.Text=tostring(game.JobId)
     jbl.TextColor3=C.acc2; jbl.TextSize=10; jbl.Font=Enum.Font.Gotham
     jbl.TextXAlignment=Enum.TextXAlignment.Center; jbl.BorderSizePixel=0; Rnd(jbl,6); jbl.ZIndex=10
     Btn(pg,"Copiar JobId",function()
@@ -1768,7 +1697,7 @@ end
 -- ============================================================
 local SBtn=Instance.new("TextButton",SG)
 SBtn.Size=UDim2.new(0,160,0,32); SBtn.Position=UDim2.new(0,20,0,55)
-SBtn.BackgroundColor3=C.side; SBtn.BackgroundTransparency=0.1
+SBtn.BackgroundColor3=C.side; SBtn.BackgroundTransparency=0
 SBtn.Text="⚔ CHINA HUB v7.0"; SBtn.TextColor3=C.acc2
 SBtn.TextSize=10; SBtn.Font=Enum.Font.GothamBold; SBtn.BorderSizePixel=0; SBtn.Visible=false
 Rnd(SBtn,8); Str(SBtn,C.acc,1.5); SBtn.ZIndex=10
@@ -1801,4 +1730,4 @@ RunService.RenderStepped:Connect(function()
     if espT%12==0 then UpdF(); UpdBoss(); espT=0 end
 end)
 
-print("[China Hub Free v7.0 | Update 11 | OMG Hub Style] carregado — "..LP.Name)
+print("[China Hub Free v7.0 | Update 11] carregado — "..LP.Name)
