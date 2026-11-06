@@ -1,6 +1,6 @@
 -- ============================================================
---  King Legacy Multi-Hack Script v2.1
---  PATCH: Localizações Sea 1 atualizadas + tecla Ctrl
+--  King Legacy Multi-Hack Script v2.2
+--  PATCH: sem tab Ocultar | ShowBtn top-left | aba Auto Farm
 -- ============================================================
 
 local Players          = game:GetService("Players")
@@ -8,6 +8,7 @@ local RunService       = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local HttpService      = game:GetService("HttpService")
 local CoreGui          = game:GetService("CoreGui")
+local VirtualUser      = game:GetService("VirtualUser")
 
 local LP     = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -25,7 +26,13 @@ local Cfg = {
     Col_Player  = Color3.fromRGB(255, 60,  60),
     Col_Fruit   = Color3.fromRGB(60,  220, 60),
     Col_Dungeon = Color3.fromRGB(60,  140, 255),
-    HideKey     = Enum.KeyCode.LeftControl,  -- << CTRL agora
+    HideKey     = Enum.KeyCode.LeftControl,
+}
+
+local Farm = {
+    Level   = false,
+    Attack  = false,
+    Mode    = "Melee",   -- "Melee" | "Sword" | "Fruit"
 }
 
 -- ============================================================
@@ -112,6 +119,92 @@ local function IsDungeon(obj)
     local n = obj.Name:lower()
     for _,k in ipairs(DungeonKW) do if n:find(k) then return true end end
 end
+
+-- ============================================================
+--  AUTO FARM — LÓGICA
+-- ============================================================
+-- Retorna o Model de mob vivo mais próximo do player
+local function NearestMob()
+    local char = LP.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
+    local origin = char.HumanoidRootPart.Position
+    local best, bestDist = nil, math.huge
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and obj ~= char then
+            local hum = obj:FindFirstChildOfClass("Humanoid")
+            local hrp = obj:FindFirstChild("HumanoidRootPart")
+            -- exclui outros players
+            if hum and hrp and hum.Health > 0
+               and not Players:GetPlayerFromCharacter(obj) then
+                local d = (origin - hrp.Position).Magnitude
+                if d < bestDist then
+                    bestDist = d
+                    best = obj
+                end
+            end
+        end
+    end
+    return best, bestDist
+end
+
+-- Executa um ataque baseado no modo selecionado
+local function DoAttack(target)
+    if not target then return end
+    local hrp = target:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    if Farm.Mode == "Melee" then
+        -- M1 click na posição de tela do mob
+        local sp, _, onScr = Camera:WorldToViewportPoint(hrp.Position)
+        if onScr then
+            VirtualUser:ClickButton1(Vector2.new(sp.X, sp.Y), CFrame.new())
+        end
+
+    elseif Farm.Mode == "Sword" then
+        -- Habilidade Z de espada (padrão KL)
+        local VIM = game:GetService("VirtualInputManager")
+        VIM:SendKeyEvent(true,  Enum.KeyCode.Z, false, game)
+        task.wait(0.08)
+        VIM:SendKeyEvent(false, Enum.KeyCode.Z, false, game)
+
+    elseif Farm.Mode == "Fruit" then
+        -- Habilidade Z de fruta
+        local VIM = game:GetService("VirtualInputManager")
+        VIM:SendKeyEvent(true,  Enum.KeyCode.Z, false, game)
+        task.wait(0.08)
+        VIM:SendKeyEvent(false, Enum.KeyCode.Z, false, game)
+    end
+end
+
+-- Loop principal do farm
+task.spawn(function()
+    while true do
+        task.wait(0.15)
+        if not Farm.Level and not Farm.Attack then continue end
+
+        local mob, dist = NearestMob()
+        if not mob then continue end
+        local hrp = mob:FindFirstChild("HumanoidRootPart")
+        if not hrp then continue end
+
+        -- Farm Level: TP perto do mob
+        if Farm.Level then
+            local char = LP.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                if dist > 8 then
+                    char.HumanoidRootPart.CFrame =
+                        CFrame.new(hrp.Position + Vector3.new(4, 2, 0))
+                    task.wait(0.1)
+                end
+            end
+        end
+
+        -- Auto Attack: atacar o mob
+        if Farm.Attack then
+            DoAttack(mob)
+        end
+    end
+end)
 
 -- ============================================================
 --  ESP POOLS
@@ -252,38 +345,27 @@ local function TP_NearestFruit()
     TP(fruits[1].pos)
 end
 
--- ============================================================
---  LOCALIZAÇÕES — FIRST SEA (King Legacy)
---  Coordenadas testadas; Y pode variar ±10 dependendo do terreno.
---  Se uma ilha reposicionou após update, use a aba de coordenadas
---  manuais pra calibrar e me passa o novo valor.
--- ============================================================
 local Locations = {
-    -- ── SPAWN / INÍCIO ──────────────────────────────────────
-    ["🏝 Ilha Inicial"]         = Vector3.new(  -210,  18,   180),   -- spawn padrão Sea 1
-    ["⚓ Base Marinha (Logue)"] = Vector3.new(   980,  20,  -520),   -- Shells Town / Marine base
-    -- ── ILHAS PRINCIPAIS ────────────────────────────────────
-    ["🏴 Ilha Buggy"]           = Vector3.new(   420,  20,  -980),
-    ["🍊 Ilha da Nami"]         = Vector3.new(  1250,  20,   640),   -- Cocoyasi / Arlong Park
-    ["🐟 Ilha Arlong"]          = Vector3.new(  1820,  20,  1480),
-    ["🍖 Baratie (Rest.)"]      = Vector3.new(  -780,  20,  1250),
-    ["⚔ Coliseu"]               = Vector3.new(  1620,  20,  -870),
-    ["🏰 Thriller Bark"]        = Vector3.new( -3050,  22,  1980),
-    ["🌊 Reverse Mountain"]     = Vector3.new(  2200,  25, -2800),
-    ["🔱 Marineford"]           = Vector3.new(  2550,  20, -2050),
-    ["🔒 Impel Down"]           = Vector3.new(  2820,  20,  1760),
-    ["⛩ Ilha Shanks"]           = Vector3.new( -1900,  20,  -840),
-    ["🏯 Ilha Mihawk"]          = Vector3.new( -2500,  20,  -300),
-    ["🎪 Ilha Buggy (Circus)"]  = Vector3.new(   380,  20, -1250),
-    -- ── SKY ISLANDS ─────────────────────────────────────────
-    ["☁ Skypiea / Sky Island"]  = Vector3.new( -2820, 855, -1620),
-    ["🏟 Sky Coliseu"]          = Vector3.new( -3200,1200, -1600),
-    ["🌩 Upper Yard"]           = Vector3.new( -3100, 870, -1900),
-    -- ── DUNGEONS / RAIDS ────────────────────────────────────
-    ["🚪 Entrada Dungeon"]      = Vector3.new(  1180,  20, -1480),
-    ["👹 Sala do Boss"]         = Vector3.new(  1350,  20, -1700),
-    -- ── SECOND SEA (portal) ─────────────────────────────────
-    ["🌊 Portal 2º Mar"]        = Vector3.new(  2900,  20,   900),
+    ["🏝 Ilha Inicial"]         = Vector3.new( -210,  18,   180),
+    ["⚓ Base Marinha (Logue)"] = Vector3.new(  980,  20,  -520),
+    ["🏴 Ilha Buggy"]           = Vector3.new(  420,  20,  -980),
+    ["🎪 Ilha Buggy (Circus)"]  = Vector3.new(  380,  20, -1250),
+    ["🍊 Ilha da Nami"]         = Vector3.new( 1250,  20,   640),
+    ["🐟 Ilha Arlong"]          = Vector3.new( 1820,  20,  1480),
+    ["🍖 Baratie (Rest.)"]      = Vector3.new( -780,  20,  1250),
+    ["⚔ Coliseu"]               = Vector3.new( 1620,  20,  -870),
+    ["⛩ Ilha Shanks"]           = Vector3.new(-1900,  20,  -840),
+    ["🏯 Ilha Mihawk"]          = Vector3.new(-2500,  20,  -300),
+    ["🏰 Thriller Bark"]        = Vector3.new(-3050,  22,  1980),
+    ["🌊 Reverse Mountain"]     = Vector3.new( 2200,  25, -2800),
+    ["🔱 Marineford"]           = Vector3.new( 2550,  20, -2050),
+    ["🔒 Impel Down"]           = Vector3.new( 2820,  20,  1760),
+    ["🚪 Entrada Dungeon"]      = Vector3.new( 1180,  20, -1480),
+    ["👹 Sala do Boss"]         = Vector3.new( 1350,  20, -1700),
+    ["☁ Skypiea / Sky Island"]  = Vector3.new(-2820, 855, -1620),
+    ["🌩 Upper Yard"]           = Vector3.new(-3100, 870, -1900),
+    ["🏟 Sky Coliseu"]          = Vector3.new(-3200,1200, -1600),
+    ["🌊 Portal 2º Mar"]        = Vector3.new( 2900,  20,   900),
 }
 
 -- ============================================================
@@ -297,28 +379,27 @@ SG.Name="KL_SCRIPT"; SG.ResetOnSpawn=false
 SG.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
 SG.Parent=CoreGui
 
--- ---- Botão flutuante ----
+-- ---- Botão flutuante — canto superior esquerdo, com padding ----
 local ShowBtn = Instance.new("TextButton", SG)
-ShowBtn.Size = UDim2.new(0, 110, 0, 32)
-ShowBtn.Position = UDim2.new(0, 12, 0.5, -16)
+ShowBtn.Size     = UDim2.new(0, 110, 0, 32)
+ShowBtn.Position = UDim2.new(0, 22, 0, 55)   -- top-left com margem
 ShowBtn.BackgroundColor3 = Color3.fromRGB(20,20,45)
-ShowBtn.Text = "⚔ KL Script"
+ShowBtn.Text     = "⚔ KL Script"
 ShowBtn.TextColor3 = Color3.fromRGB(170,170,255)
-ShowBtn.TextSize = 12
-ShowBtn.Font = Enum.Font.GothamBold
+ShowBtn.TextSize   = 12
+ShowBtn.Font       = Enum.Font.GothamBold
 ShowBtn.BorderSizePixel = 0
-ShowBtn.Visible = false
+ShowBtn.Visible    = false
 Instance.new("UICorner", ShowBtn).CornerRadius = UDim.new(0,8)
 local ShowStroke = Instance.new("UIStroke", ShowBtn)
-ShowStroke.Color = Color3.fromRGB(70,70,170)
-ShowStroke.Thickness = 1.5
+ShowStroke.Color = Color3.fromRGB(70,70,170); ShowStroke.Thickness = 1.5
 
 -- ---- Frame principal ----
 local MF = Instance.new("Frame", SG)
-MF.Size = UDim2.new(0,460,0,520)
+MF.Size     = UDim2.new(0,460,0,520)
 MF.Position = UDim2.new(0.5,-230,0.5,-260)
 MF.BackgroundColor3 = Color3.fromRGB(12,12,18)
-MF.BorderSizePixel = 0
+MF.BorderSizePixel  = 0
 Instance.new("UICorner",MF).CornerRadius = UDim.new(0,8)
 local MFStr = Instance.new("UIStroke",MF)
 MFStr.Color = Color3.fromRGB(70,70,170); MFStr.Thickness = 1.5
@@ -327,30 +408,22 @@ MFStr.Color = Color3.fromRGB(70,70,170); MFStr.Thickness = 1.5
 local TB = Instance.new("Frame", MF)
 TB.Size = UDim2.new(1,0,0,36)
 TB.BackgroundColor3 = Color3.fromRGB(20,20,45)
-TB.BorderSizePixel = 0
+TB.BorderSizePixel  = 0
 Instance.new("UICorner",TB).CornerRadius = UDim.new(0,8)
 
 local TL = Instance.new("TextLabel",TB)
-TL.Size = UDim2.new(1,-110,1,0)
-TL.Position = UDim2.new(0,12,0,0)
-TL.BackgroundTransparency = 1
-TL.Text = "⚔  King Legacy Script"
-TL.TextColor3 = Color3.fromRGB(170,170,255)
-TL.TextSize = 14
-TL.Font = Enum.Font.GothamBold
-TL.TextXAlignment = Enum.TextXAlignment.Left
+TL.Size=UDim2.new(1,-110,1,0); TL.Position=UDim2.new(0,12,0,0)
+TL.BackgroundTransparency=1; TL.Text="⚔  King Legacy Script"
+TL.TextColor3=Color3.fromRGB(170,170,255); TL.TextSize=14
+TL.Font=Enum.Font.GothamBold; TL.TextXAlignment=Enum.TextXAlignment.Left
 
 local function MakeHBtn(label, color, xOff)
     local b = Instance.new("TextButton",TB)
-    b.Size = UDim2.new(0,26,0,26)
-    b.Position = UDim2.new(1,xOff,0.5,-13)
-    b.BackgroundColor3 = color
-    b.Text = label
-    b.TextColor3 = Color3.new(1,1,1)
-    b.TextSize = 13
-    b.Font = Enum.Font.GothamBold
-    b.BorderSizePixel = 0
-    Instance.new("UICorner",b).CornerRadius = UDim.new(0,5)
+    b.Size=UDim2.new(0,26,0,26); b.Position=UDim2.new(1,xOff,0.5,-13)
+    b.BackgroundColor3=color; b.Text=label
+    b.TextColor3=Color3.new(1,1,1); b.TextSize=13
+    b.Font=Enum.Font.GothamBold; b.BorderSizePixel=0
+    Instance.new("UICorner",b).CornerRadius=UDim.new(0,5)
     return b
 end
 
@@ -360,51 +433,41 @@ local HideBtn  = MakeHBtn("👁", Color3.fromRGB(60,60,120), -66)
 
 -- ---- Tab bar ----
 local TabBar = Instance.new("Frame", MF)
-TabBar.Size = UDim2.new(1,0,0,32)
-TabBar.Position = UDim2.new(0,0,0,36)
-TabBar.BackgroundColor3 = Color3.fromRGB(18,18,32)
-TabBar.BorderSizePixel = 0
+TabBar.Size=UDim2.new(1,0,0,32); TabBar.Position=UDim2.new(0,0,0,36)
+TabBar.BackgroundColor3=Color3.fromRGB(18,18,32); TabBar.BorderSizePixel=0
 local TBL = Instance.new("UIListLayout",TabBar)
-TBL.FillDirection = Enum.FillDirection.Horizontal
-TBL.Padding = UDim.new(0,3)
-TBL.VerticalAlignment = Enum.VerticalAlignment.Center
-Instance.new("UIPadding",TabBar).PaddingLeft = UDim.new(0,8)
+TBL.FillDirection=Enum.FillDirection.Horizontal
+TBL.Padding=UDim.new(0,3); TBL.VerticalAlignment=Enum.VerticalAlignment.Center
+Instance.new("UIPadding",TabBar).PaddingLeft=UDim.new(0,8)
 
 -- ---- Content ----
 local CH = Instance.new("Frame", MF)
-CH.Size = UDim2.new(1,0,1,-68)
-CH.Position = UDim2.new(0,0,0,68)
-CH.BackgroundTransparency = 1
+CH.Size=UDim2.new(1,0,1,-68); CH.Position=UDim2.new(0,0,0,68)
+CH.BackgroundTransparency=1
 
 local SF = Instance.new("ScrollingFrame", CH)
-SF.Size = UDim2.new(1,0,1,0)
-SF.BackgroundTransparency = 1
-SF.ScrollBarThickness = 4
-SF.ScrollBarImageColor3 = Color3.fromRGB(80,80,180)
-SF.CanvasSize = UDim2.new(0,0,0,0)
-SF.AutomaticCanvasSize = Enum.AutomaticSize.Y
-Instance.new("UIListLayout",SF).Padding = UDim.new(0,5)
-local sfPad = Instance.new("UIPadding",SF)
+SF.Size=UDim2.new(1,0,1,0); SF.BackgroundTransparency=1
+SF.ScrollBarThickness=4; SF.ScrollBarImageColor3=Color3.fromRGB(80,80,180)
+SF.CanvasSize=UDim2.new(0,0,0,0); SF.AutomaticCanvasSize=Enum.AutomaticSize.Y
+Instance.new("UIListLayout",SF).Padding=UDim.new(0,5)
+local sfPad=Instance.new("UIPadding",SF)
 sfPad.PaddingLeft=UDim.new(0,10); sfPad.PaddingRight=UDim.new(0,10); sfPad.PaddingTop=UDim.new(0,8)
 
 -- ---- Helpers ----
-local Pages = {}
-local TabBtns = {}
+local Pages, TabBtns = {}, {}
 
 local function Tab(icon, label)
     local btn = Instance.new("TextButton", TabBar)
-    btn.Size = UDim2.new(0,86,0,26)
-    btn.BackgroundColor3 = Color3.fromRGB(28,28,52)
-    btn.Text = icon.." "..label
-    btn.TextColor3 = Color3.fromRGB(140,140,200)
-    btn.TextSize = 11; btn.Font = Enum.Font.GothamBold
-    btn.BorderSizePixel = 0
-    Instance.new("UICorner",btn).CornerRadius = UDim.new(0,5)
-    local pg = Instance.new("Frame", SF)
-    pg.Size = UDim2.new(1,0,0,0)
-    pg.AutomaticSize = Enum.AutomaticSize.Y
-    pg.BackgroundTransparency = 1; pg.Visible = false
-    Instance.new("UIListLayout",pg).Padding = UDim.new(0,5)
+    btn.Size=UDim2.new(0,76,0,26)
+    btn.BackgroundColor3=Color3.fromRGB(28,28,52)
+    btn.Text=icon.." "..label
+    btn.TextColor3=Color3.fromRGB(140,140,200)
+    btn.TextSize=10; btn.Font=Enum.Font.GothamBold; btn.BorderSizePixel=0
+    Instance.new("UICorner",btn).CornerRadius=UDim.new(0,5)
+    local pg=Instance.new("Frame",SF)
+    pg.Size=UDim2.new(1,0,0,0); pg.AutomaticSize=Enum.AutomaticSize.Y
+    pg.BackgroundTransparency=1; pg.Visible=false
+    Instance.new("UIListLayout",pg).Padding=UDim.new(0,5)
     Pages[label]=pg; TabBtns[label]=btn
     btn.MouseButton1Click:Connect(function()
         for k,p in pairs(Pages) do
@@ -421,10 +484,10 @@ local function Tab(icon, label)
 end
 
 local function Section(parent, text)
-    local f = Instance.new("Frame", parent)
+    local f=Instance.new("Frame",parent)
     f.Size=UDim2.new(1,0,0,22); f.BackgroundColor3=Color3.fromRGB(28,28,58); f.BorderSizePixel=0
     Instance.new("UICorner",f).CornerRadius=UDim.new(0,5)
-    local l = Instance.new("TextLabel",f)
+    local l=Instance.new("TextLabel",f)
     l.Size=UDim2.new(1,-10,1,0); l.Position=UDim2.new(0,8,0,0)
     l.BackgroundTransparency=1; l.Text="▸ "..text
     l.TextColor3=Color3.fromRGB(130,130,220); l.TextSize=11
@@ -432,22 +495,22 @@ local function Section(parent, text)
 end
 
 local function Toggle(parent, text, default, cb)
-    local row = Instance.new("Frame", parent)
+    local row=Instance.new("Frame",parent)
     row.Size=UDim2.new(1,0,0,30); row.BackgroundColor3=Color3.fromRGB(20,20,32); row.BorderSizePixel=0
     Instance.new("UICorner",row).CornerRadius=UDim.new(0,5)
-    local lbl = Instance.new("TextLabel",row)
+    local lbl=Instance.new("TextLabel",row)
     lbl.Size=UDim2.new(1,-52,1,0); lbl.Position=UDim2.new(0,10,0,0)
     lbl.BackgroundTransparency=1; lbl.Text=text
     lbl.TextColor3=Color3.fromRGB(195,195,195); lbl.TextSize=12
     lbl.Font=Enum.Font.Gotham; lbl.TextXAlignment=Enum.TextXAlignment.Left
-    local btn = Instance.new("TextButton",row)
+    local btn=Instance.new("TextButton",row)
     btn.Size=UDim2.new(0,42,0,20); btn.Position=UDim2.new(1,-50,0.5,-10)
     btn.BackgroundColor3=default and Color3.fromRGB(45,175,75) or Color3.fromRGB(80,28,28)
     btn.Text=default and "ON" or "OFF"
     btn.TextColor3=Color3.new(1,1,1); btn.TextSize=10
     btn.Font=Enum.Font.GothamBold; btn.BorderSizePixel=0
     Instance.new("UICorner",btn).CornerRadius=UDim.new(0,10)
-    local state = default or false
+    local state=default or false
     btn.MouseButton1Click:Connect(function()
         state=not state
         btn.BackgroundColor3=state and Color3.fromRGB(45,175,75) or Color3.fromRGB(80,28,28)
@@ -457,7 +520,7 @@ local function Toggle(parent, text, default, cb)
 end
 
 local function Button(parent, text, cb)
-    local b = Instance.new("TextButton", parent)
+    local b=Instance.new("TextButton",parent)
     b.Size=UDim2.new(1,0,0,30); b.BackgroundColor3=Color3.fromRGB(38,38,88)
     b.Text=text; b.TextColor3=Color3.fromRGB(215,215,255)
     b.TextSize=12; b.Font=Enum.Font.GothamBold; b.BorderSizePixel=0
@@ -470,7 +533,7 @@ local function Button(parent, text, cb)
 end
 
 local function Input(parent, hint, cb)
-    local box = Instance.new("TextBox", parent)
+    local box=Instance.new("TextBox",parent)
     box.Size=UDim2.new(1,0,0,30); box.BackgroundColor3=Color3.fromRGB(16,16,28)
     box.Text=""; box.PlaceholderText=hint
     box.PlaceholderColor3=Color3.fromRGB(90,90,110)
@@ -484,12 +547,50 @@ local function Input(parent, hint, cb)
 end
 
 local function SLabel(parent, text)
-    local l = Instance.new("TextLabel", parent)
+    local l=Instance.new("TextLabel",parent)
     l.Size=UDim2.new(1,0,0,18); l.BackgroundTransparency=1
     l.Text=text; l.TextColor3=Color3.fromRGB(160,160,170)
     l.TextSize=11; l.Font=Enum.Font.Gotham
     l.TextXAlignment=Enum.TextXAlignment.Left
     Instance.new("UIPadding",l).PaddingLeft=UDim.new(0,4)
+end
+
+-- ---- Selector de 3 opções (para tipo de ataque) ----
+local function Selector(parent, options, default, cb)
+    local row=Instance.new("Frame",parent)
+    row.Size=UDim2.new(1,0,0,36); row.BackgroundColor3=Color3.fromRGB(16,16,28); row.BorderSizePixel=0
+    Instance.new("UICorner",row).CornerRadius=UDim.new(0,5)
+    local ll=Instance.new("UIListLayout",row)
+    ll.FillDirection=Enum.FillDirection.Horizontal
+    ll.Padding=UDim.new(0,4); ll.VerticalAlignment=Enum.VerticalAlignment.Center
+    Instance.new("UIPadding",row).PaddingLeft=UDim.new(0,6)
+
+    local btns={}
+    local function Select(chosen)
+        Farm.Mode=chosen
+        for opt,b in pairs(btns) do
+            b.BackgroundColor3 = opt==chosen
+                and Color3.fromRGB(55,145,55)
+                or  Color3.fromRGB(38,38,80)
+            b.TextColor3 = opt==chosen
+                and Color3.fromRGB(220,255,220)
+                or  Color3.fromRGB(180,180,200)
+        end
+        if cb then cb(chosen) end
+    end
+
+    for _,opt in ipairs(options) do
+        local b=Instance.new("TextButton",row)
+        b.Size=UDim2.new(0,118,0,26)
+        b.BackgroundColor3=Color3.fromRGB(38,38,80)
+        b.Text=opt; b.TextColor3=Color3.fromRGB(180,180,200)
+        b.TextSize=11; b.Font=Enum.Font.GothamBold; b.BorderSizePixel=0
+        Instance.new("UICorner",b).CornerRadius=UDim.new(0,5)
+        btns[opt]=b
+        b.MouseButton1Click:Connect(function() Select(opt) end)
+    end
+    Select(default)
+    return row
 end
 
 -- ============================================================
@@ -508,8 +609,30 @@ Section(espPg,"Dungeon ESP")
 Toggle(espPg,"Dungeon ESP",  false,function(v) Cfg.DungeonESP=v; if not v then ClearPool(DungeonPool) end end)
 Section(espPg,"Alcance")
 SLabel(espPg,"  Distância máxima (studs):")
-local rIn = Input(espPg,"2000",function(v) Cfg.ESPRange=tonumber(v) or 2000 end)
+local rIn=Input(espPg,"2000",function(v) Cfg.ESPRange=tonumber(v) or 2000 end)
 rIn.Text="2000"
+
+-- AUTO FARM
+local farmPg = Tab("⚔","Farm")
+Section(farmPg,"Auto Farm")
+
+Toggle(farmPg,"🗺 Auto Farm Level", false, function(v)
+    Farm.Level = v
+end)
+
+Toggle(farmPg,"👊 Auto Attack", false, function(v)
+    Farm.Attack = v
+end)
+
+Section(farmPg,"Tipo de Ataque")
+SLabel(farmPg,"  Seleciona o estilo:")
+Selector(farmPg, {"Melee","Sword","Fruit"}, "Melee")
+
+Section(farmPg,"Info")
+SLabel(farmPg,"  Melee → M1 click no mob")
+SLabel(farmPg,"  Sword → usa skill Z da espada")
+SLabel(farmPg,"  Fruit → usa skill Z da fruta")
+SLabel(farmPg,"  Farm Level ativa o TP automático")
 
 -- TELEPORT
 local tpPg = Tab("🌀","Teleport")
@@ -524,7 +647,7 @@ Button(tpPg,"🔄 TP para Todas as Frutas",function()
 end)
 Section(tpPg,"Players")
 SLabel(tpPg,"  Nome do player:")
-local plrIn = Input(tpPg,"username...")
+local plrIn=Input(tpPg,"username...")
 Button(tpPg,"→ Ir para Player",function() TP_Player(plrIn.Text) end)
 Button(tpPg,"→ Ver Players Online",function()
     local n={}
@@ -533,54 +656,28 @@ Button(tpPg,"→ Ver Players Online",function()
     end
     plrIn.Text=table.concat(n,", ")
 end)
-
--- ── ILHAS: Sea 1 (separado por grupo) ──────────────────────
 Section(tpPg,"🏝 Ilhas — Sea 1")
--- ordem por progressão do jogo
 local S1_Order = {
-    "🏝 Ilha Inicial",
-    "⚓ Base Marinha (Logue)",
-    "🏴 Ilha Buggy",
-    "🎪 Ilha Buggy (Circus)",
-    "🍊 Ilha da Nami",
-    "🐟 Ilha Arlong",
-    "🍖 Baratie (Rest.)",
-    "⚔ Coliseu",
-    "⛩ Ilha Shanks",
-    "🏯 Ilha Mihawk",
-    "🏰 Thriller Bark",
-    "🌊 Reverse Mountain",
-    "🔱 Marineford",
-    "🔒 Impel Down",
-    "🚪 Entrada Dungeon",
-    "👹 Sala do Boss",
+    "🏝 Ilha Inicial","⚓ Base Marinha (Logue)","🏴 Ilha Buggy",
+    "🎪 Ilha Buggy (Circus)","🍊 Ilha da Nami","🐟 Ilha Arlong",
+    "🍖 Baratie (Rest.)","⚔ Coliseu","⛩ Ilha Shanks","🏯 Ilha Mihawk",
+    "🏰 Thriller Bark","🌊 Reverse Mountain","🔱 Marineford",
+    "🔒 Impel Down","🚪 Entrada Dungeon","👹 Sala do Boss",
 }
 for _,name in ipairs(S1_Order) do
-    local n, p = name, Locations[name]
-    if p then
-        Button(tpPg,"→ "..n, function() TP(p) end)
-    end
+    local n,p=name,Locations[name]
+    if p then Button(tpPg,"→ "..n,function() TP(p) end) end
 end
-
 Section(tpPg,"☁ Sky Islands")
-local SKY_Order = {
-    "☁ Skypiea / Sky Island",
-    "🌩 Upper Yard",
-    "🏟 Sky Coliseu",
-}
-for _,name in ipairs(SKY_Order) do
-    local n, p = name, Locations[name]
-    if p then
-        Button(tpPg,"→ "..n, function() TP(p) end)
-    end
+for _,name in ipairs({"☁ Skypiea / Sky Island","🌩 Upper Yard","🏟 Sky Coliseu"}) do
+    local n,p=name,Locations[name]
+    if p then Button(tpPg,"→ "..n,function() TP(p) end) end
 end
-
 Section(tpPg,"🌊 Segundo Mar")
-Button(tpPg,"→ 🌊 Portal 2º Mar", function() TP(Locations["🌊 Portal 2º Mar"]) end)
-
+Button(tpPg,"→ 🌊 Portal 2º Mar",function() TP(Locations["🌊 Portal 2º Mar"]) end)
 Section(tpPg,"Coordenadas Manuais")
 SLabel(tpPg,"  X, Y, Z separados por vírgula:")
-local cIn = Input(tpPg,"0, 100, 0")
+local cIn=Input(tpPg,"0, 100, 0")
 Button(tpPg,"→ Ir para Coordenadas",function()
     local t=cIn.Text:split(",")
     local x,y,z=tonumber(t[1]),tonumber(t[2]),tonumber(t[3])
@@ -598,15 +695,15 @@ end)
 -- WEBHOOK
 local whPg = Tab("🔔","Webhook")
 Section(whPg,"URL do Webhook")
-local whIn = Input(whPg,"https://discord.com/api/webhooks/...",function(v) Cfg.WHUrl=v end)
+Input(whPg,"https://discord.com/api/webhooks/...",function(v) Cfg.WHUrl=v end)
 Section(whPg,"Alertas")
 Toggle(whPg,"Alerta: Fruta", false,function(v) Cfg.WH_Fruit=v end)
 Toggle(whPg,"Alerta: Player",false,function(v) Cfg.WH_Player=v end)
 Section(whPg,"Manual")
 SLabel(whPg,"  Título:")
-local wht = Input(whPg,"Título...")
+local wht=Input(whPg,"Título...")
 SLabel(whPg,"  Mensagem:")
-local whm = Input(whPg,"Mensagem...")
+local whm=Input(whPg,"Mensagem...")
 Button(whPg,"📤 Enviar",function() WH_Custom(wht.Text,whm.Text,3447003) end)
 Button(whPg,"🧪 Testar Conexão",function()
     WH_Custom("✅ Teste OK","Conectado! Player: "..LP.Name,65280)
@@ -666,79 +763,23 @@ end)
 Button(miscPg,"🔁 Recarregar Personagem",function() LP:LoadCharacter() end)
 
 -- ============================================================
---  ABA OCULTAR — tecla Ctrl como padrão
--- ============================================================
-local hidePg = Tab("🙈","Ocultar")
-Section(hidePg,"Ocultar Painel")
-
--- Badge mostrando tecla atual
-local keyLabel = Instance.new("TextLabel", hidePg)
-keyLabel.Size=UDim2.new(1,0,0,32)
-keyLabel.BackgroundColor3=Color3.fromRGB(18,28,18)
-keyLabel.Text="⌨  Tecla atual:  CTRL (LeftControl)"
-keyLabel.TextColor3=Color3.fromRGB(120,230,120)
-keyLabel.TextSize=12; keyLabel.Font=Enum.Font.GothamBold
-keyLabel.BorderSizePixel=0
-Instance.new("UICorner",keyLabel).CornerRadius=UDim.new(0,5)
-Instance.new("UIStroke",keyLabel).Color=Color3.fromRGB(40,100,40)
-
-Button(hidePg,"🙈 Ocultar Painel Agora",function()
-    MF.Visible=false; ShowBtn.Visible=true
-end)
-
-Section(hidePg,"Redefinir Tecla de Ocultar")
-SLabel(hidePg,"  Clica no botão e aperta qualquer tecla:")
-
-local keyChangeBtn = Instance.new("TextButton", hidePg)
-keyChangeBtn.Size=UDim2.new(1,0,0,38)
-keyChangeBtn.BackgroundColor3=Color3.fromRGB(40,40,80)
-keyChangeBtn.Text="🎹 Clica aqui → aperta a tecla"
-keyChangeBtn.TextColor3=Color3.fromRGB(220,220,255)
-keyChangeBtn.TextSize=12; keyChangeBtn.Font=Enum.Font.GothamBold
-keyChangeBtn.BorderSizePixel=0
-Instance.new("UICorner",keyChangeBtn).CornerRadius=UDim.new(0,5)
-
-local listeningForKey = false
-keyChangeBtn.MouseButton1Click:Connect(function()
-    listeningForKey = true
-    keyChangeBtn.Text = "⌨ Aguardando tecla..."
-    keyChangeBtn.BackgroundColor3 = Color3.fromRGB(80,60,20)
-end)
-
--- ============================================================
---  LÓGICA DE OCULTAR / MOSTRAR
+--  OCULTAR / MOSTRAR — sem aba, só tecla Ctrl + botão 👁
 -- ============================================================
 local function ToggleVisibility()
     if MF.Visible then
-        MF.Visible = false; ShowBtn.Visible = true
+        MF.Visible=false; ShowBtn.Visible=true
     else
-        MF.Visible = true; ShowBtn.Visible = false
+        MF.Visible=true;  ShowBtn.Visible=false
     end
 end
 
 HideBtn.MouseButton1Click:Connect(ToggleVisibility)
 ShowBtn.MouseButton1Click:Connect(ToggleVisibility)
 
--- Input unificado: ocultar por tecla + redefinir tecla
 UserInputService.InputBegan:Connect(function(inp, gpe)
     if inp.UserInputType ~= Enum.UserInputType.Keyboard then return end
-
-    -- redefinindo tecla
-    if listeningForKey then
-        Cfg.HideKey = inp.KeyCode
-        local keyName = tostring(inp.KeyCode):gsub("Enum.KeyCode.","")
-        keyLabel.Text = "⌨  Tecla atual:  "..keyName
-        keyChangeBtn.Text = "🎹 Clica aqui → aperta a tecla"
-        keyChangeBtn.BackgroundColor3 = Color3.fromRGB(40,40,80)
-        listeningForKey = false
-        return
-    end
-
-    -- toggle normal (ignora quando digitando em TextBox)
     if gpe then return end
-    if inp.KeyCode == Cfg.HideKey then
-        ToggleVisibility()
-    end
+    if inp.KeyCode == Cfg.HideKey then ToggleVisibility() end
 end)
 
 -- ============================================================
@@ -746,7 +787,7 @@ end)
 -- ============================================================
 local dragging, dInput, dStart, dPos
 TB.InputBegan:Connect(function(inp)
-    if inp.UserInputType == Enum.UserInputType.MouseButton1 then
+    if inp.UserInputType==Enum.UserInputType.MouseButton1 then
         dragging=true; dStart=inp.Position; dPos=MF.Position
         inp.Changed:Connect(function()
             if inp.UserInputState==Enum.UserInputState.End then dragging=false end
@@ -767,12 +808,12 @@ end)
 --  FECHAR / MINIMIZAR
 -- ============================================================
 CloseBtn.MouseButton1Click:Connect(function()
+    Farm.Level=false; Farm.Attack=false
     for _,o in pairs(PLR_ESP) do for _,v in pairs(o) do pcall(function() v:Remove() end) end end
     ClearPool(FruitPool); ClearPool(DungeonPool)
     SG:Destroy()
 end)
-
-local minimized = false
+local minimized=false
 MinBtn.MouseButton1Click:Connect(function()
     minimized=not minimized
     CH.Visible=not minimized
@@ -798,11 +839,11 @@ end)
 -- ============================================================
 --  RENDER LOOP
 -- ============================================================
-local tick = 0
+local tick=0
 RunService.RenderStepped:Connect(function()
     tick=tick+1
     UpdatePlayerESP()
     if tick%12==0 then UpdateFruitESP(); UpdateDungeonESP(); tick=0 end
 end)
 
-print("[KL v2.1] Carregado — "..LP.Name)
+print("[KL v2.2] Carregado — "..LP.Name)
