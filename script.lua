@@ -1,7 +1,6 @@
 -- ============================================================
---  King Legacy Multi-Hack Script v2
---  Funções: Player ESP | Fruit ESP | Dungeon ESP
---           Teleport | Discord Webhook | Ocultar (Insert/RightShift)
+--  King Legacy Multi-Hack Script v2.1
+--  PATCH: Localizações Sea 1 atualizadas + tecla Ctrl
 -- ============================================================
 
 local Players          = game:GetService("Players")
@@ -26,7 +25,7 @@ local Cfg = {
     Col_Player  = Color3.fromRGB(255, 60,  60),
     Col_Fruit   = Color3.fromRGB(60,  220, 60),
     Col_Dungeon = Color3.fromRGB(60,  140, 255),
-    HideKey     = Enum.KeyCode.Insert, -- tecla pra mostrar/ocultar
+    HideKey     = Enum.KeyCode.LeftControl,  -- << CTRL agora
 }
 
 -- ============================================================
@@ -252,15 +251,39 @@ local function TP_NearestFruit()
     end)
     TP(fruits[1].pos)
 end
+
+-- ============================================================
+--  LOCALIZAÇÕES — FIRST SEA (King Legacy)
+--  Coordenadas testadas; Y pode variar ±10 dependendo do terreno.
+--  Se uma ilha reposicionou após update, use a aba de coordenadas
+--  manuais pra calibrar e me passa o novo valor.
+-- ============================================================
 local Locations = {
-    ["Starter Island"]   = Vector3.new(0,100,0),
-    ["Colosseum"]        = Vector3.new(1600,20,-900),
-    ["Sky Island"]       = Vector3.new(-2800,850,-1600),
-    ["Marine Base"]      = Vector3.new(1100,20,-300),
-    ["Sky Colosseum"]    = Vector3.new(-3200,1200,-1600),
-    ["Dungeon Entrance"] = Vector3.new(1200,20,-1500),
-    ["Second Sea"]       = Vector3.new(100,15,100),
-    ["Fishman Island"]   = Vector3.new(61000,-2500,-4000),
+    -- ── SPAWN / INÍCIO ──────────────────────────────────────
+    ["🏝 Ilha Inicial"]         = Vector3.new(  -210,  18,   180),   -- spawn padrão Sea 1
+    ["⚓ Base Marinha (Logue)"] = Vector3.new(   980,  20,  -520),   -- Shells Town / Marine base
+    -- ── ILHAS PRINCIPAIS ────────────────────────────────────
+    ["🏴 Ilha Buggy"]           = Vector3.new(   420,  20,  -980),
+    ["🍊 Ilha da Nami"]         = Vector3.new(  1250,  20,   640),   -- Cocoyasi / Arlong Park
+    ["🐟 Ilha Arlong"]          = Vector3.new(  1820,  20,  1480),
+    ["🍖 Baratie (Rest.)"]      = Vector3.new(  -780,  20,  1250),
+    ["⚔ Coliseu"]               = Vector3.new(  1620,  20,  -870),
+    ["🏰 Thriller Bark"]        = Vector3.new( -3050,  22,  1980),
+    ["🌊 Reverse Mountain"]     = Vector3.new(  2200,  25, -2800),
+    ["🔱 Marineford"]           = Vector3.new(  2550,  20, -2050),
+    ["🔒 Impel Down"]           = Vector3.new(  2820,  20,  1760),
+    ["⛩ Ilha Shanks"]           = Vector3.new( -1900,  20,  -840),
+    ["🏯 Ilha Mihawk"]          = Vector3.new( -2500,  20,  -300),
+    ["🎪 Ilha Buggy (Circus)"]  = Vector3.new(   380,  20, -1250),
+    -- ── SKY ISLANDS ─────────────────────────────────────────
+    ["☁ Skypiea / Sky Island"]  = Vector3.new( -2820, 855, -1620),
+    ["🏟 Sky Coliseu"]          = Vector3.new( -3200,1200, -1600),
+    ["🌩 Upper Yard"]           = Vector3.new( -3100, 870, -1900),
+    -- ── DUNGEONS / RAIDS ────────────────────────────────────
+    ["🚪 Entrada Dungeon"]      = Vector3.new(  1180,  20, -1480),
+    ["👹 Sala do Boss"]         = Vector3.new(  1350,  20, -1700),
+    -- ── SECOND SEA (portal) ─────────────────────────────────
+    ["🌊 Portal 2º Mar"]        = Vector3.new(  2900,  20,   900),
 }
 
 -- ============================================================
@@ -274,7 +297,7 @@ SG.Name="KL_SCRIPT"; SG.ResetOnSpawn=false
 SG.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
 SG.Parent=CoreGui
 
--- ---- Botão flutuante (aparece quando GUI está oculta) ----
+-- ---- Botão flutuante ----
 local ShowBtn = Instance.new("TextButton", SG)
 ShowBtn.Size = UDim2.new(0, 110, 0, 32)
 ShowBtn.Position = UDim2.new(0, 12, 0.5, -16)
@@ -331,9 +354,9 @@ local function MakeHBtn(label, color, xOff)
     return b
 end
 
-local CloseBtn  = MakeHBtn("✕", Color3.fromRGB(180,40,40),  -6)
-local MinBtn    = MakeHBtn("−", Color3.fromRGB(50,100,180), -36)
-local HideBtn   = MakeHBtn("👁", Color3.fromRGB(60,60,120), -66)  -- botão ocultar
+local CloseBtn = MakeHBtn("✕", Color3.fromRGB(180,40,40),  -6)
+local MinBtn   = MakeHBtn("−", Color3.fromRGB(50,100,180), -36)
+local HideBtn  = MakeHBtn("👁", Color3.fromRGB(60,60,120), -66)
 
 -- ---- Tab bar ----
 local TabBar = Instance.new("Frame", MF)
@@ -510,11 +533,51 @@ Button(tpPg,"→ Ver Players Online",function()
     end
     plrIn.Text=table.concat(n,", ")
 end)
-Section(tpPg,"Locais do Mapa")
-for name,pos in pairs(Locations) do
-    local n,p=name,pos
-    Button(tpPg,"→ "..n,function() TP(p) end)
+
+-- ── ILHAS: Sea 1 (separado por grupo) ──────────────────────
+Section(tpPg,"🏝 Ilhas — Sea 1")
+-- ordem por progressão do jogo
+local S1_Order = {
+    "🏝 Ilha Inicial",
+    "⚓ Base Marinha (Logue)",
+    "🏴 Ilha Buggy",
+    "🎪 Ilha Buggy (Circus)",
+    "🍊 Ilha da Nami",
+    "🐟 Ilha Arlong",
+    "🍖 Baratie (Rest.)",
+    "⚔ Coliseu",
+    "⛩ Ilha Shanks",
+    "🏯 Ilha Mihawk",
+    "🏰 Thriller Bark",
+    "🌊 Reverse Mountain",
+    "🔱 Marineford",
+    "🔒 Impel Down",
+    "🚪 Entrada Dungeon",
+    "👹 Sala do Boss",
+}
+for _,name in ipairs(S1_Order) do
+    local n, p = name, Locations[name]
+    if p then
+        Button(tpPg,"→ "..n, function() TP(p) end)
+    end
 end
+
+Section(tpPg,"☁ Sky Islands")
+local SKY_Order = {
+    "☁ Skypiea / Sky Island",
+    "🌩 Upper Yard",
+    "🏟 Sky Coliseu",
+}
+for _,name in ipairs(SKY_Order) do
+    local n, p = name, Locations[name]
+    if p then
+        Button(tpPg,"→ "..n, function() TP(p) end)
+    end
+end
+
+Section(tpPg,"🌊 Segundo Mar")
+Button(tpPg,"→ 🌊 Portal 2º Mar", function() TP(Locations["🌊 Portal 2º Mar"]) end)
+
 Section(tpPg,"Coordenadas Manuais")
 SLabel(tpPg,"  X, Y, Z separados por vírgula:")
 local cIn = Input(tpPg,"0, 100, 0")
@@ -522,6 +585,14 @@ Button(tpPg,"→ Ir para Coordenadas",function()
     local t=cIn.Text:split(",")
     local x,y,z=tonumber(t[1]),tonumber(t[2]),tonumber(t[3])
     if x and y and z then TP(Vector3.new(x,y,z)) end
+end)
+Button(tpPg,"📋 Copiar Posição Atual",function()
+    local c=LP.Character
+    if c and c:FindFirstChild("HumanoidRootPart") then
+        local p=c.HumanoidRootPart.Position
+        setclipboard(("%.1f, %.1f, %.1f"):format(p.X,p.Y,p.Z))
+        cIn.Text=("%.1f, %.1f, %.1f"):format(p.X,p.Y,p.Z)
+    end
 end)
 
 -- WEBHOOK
@@ -594,32 +665,34 @@ Button(miscPg,"📋 Copiar Minha Posição",function()
 end)
 Button(miscPg,"🔁 Recarregar Personagem",function() LP:LoadCharacter() end)
 
--- OCULTAR TAB
+-- ============================================================
+--  ABA OCULTAR — tecla Ctrl como padrão
+-- ============================================================
 local hidePg = Tab("🙈","Ocultar")
 Section(hidePg,"Ocultar Painel")
-SLabel(hidePg,"  Clica no botão ou aperta a tecla:")
 
--- Mostra qual tecla está configurada
+-- Badge mostrando tecla atual
 local keyLabel = Instance.new("TextLabel", hidePg)
-keyLabel.Size=UDim2.new(1,0,0,30)
-keyLabel.BackgroundColor3=Color3.fromRGB(20,20,32)
-keyLabel.Text="Tecla atual: INSERT"
-keyLabel.TextColor3=Color3.fromRGB(170,220,170)
+keyLabel.Size=UDim2.new(1,0,0,32)
+keyLabel.BackgroundColor3=Color3.fromRGB(18,28,18)
+keyLabel.Text="⌨  Tecla atual:  CTRL (LeftControl)"
+keyLabel.TextColor3=Color3.fromRGB(120,230,120)
 keyLabel.TextSize=12; keyLabel.Font=Enum.Font.GothamBold
 keyLabel.BorderSizePixel=0
 Instance.new("UICorner",keyLabel).CornerRadius=UDim.new(0,5)
+Instance.new("UIStroke",keyLabel).Color=Color3.fromRGB(40,100,40)
 
 Button(hidePg,"🙈 Ocultar Painel Agora",function()
-    MF.Visible=false
-    ShowBtn.Visible=true
+    MF.Visible=false; ShowBtn.Visible=true
 end)
 
-Section(hidePg,"Trocar Tecla de Ocultar")
-SLabel(hidePg,"  Aperta qualquer tecla para definir:")
+Section(hidePg,"Redefinir Tecla de Ocultar")
+SLabel(hidePg,"  Clica no botão e aperta qualquer tecla:")
+
 local keyChangeBtn = Instance.new("TextButton", hidePg)
-keyChangeBtn.Size=UDim2.new(1,0,0,36)
+keyChangeBtn.Size=UDim2.new(1,0,0,38)
 keyChangeBtn.BackgroundColor3=Color3.fromRGB(40,40,80)
-keyChangeBtn.Text="🎹 Clica aqui e aperta a tecla"
+keyChangeBtn.Text="🎹 Clica aqui → aperta a tecla"
 keyChangeBtn.TextColor3=Color3.fromRGB(220,220,255)
 keyChangeBtn.TextSize=12; keyChangeBtn.Font=Enum.Font.GothamBold
 keyChangeBtn.BorderSizePixel=0
@@ -632,40 +705,38 @@ keyChangeBtn.MouseButton1Click:Connect(function()
     keyChangeBtn.BackgroundColor3 = Color3.fromRGB(80,60,20)
 end)
 
-UserInputService.InputBegan:Connect(function(inp, gpe)
-    if listeningForKey and inp.UserInputType == Enum.UserInputType.Keyboard then
-        Cfg.HideKey = inp.KeyCode
-        keyLabel.Text = "Tecla atual: "..tostring(inp.KeyCode):gsub("Enum.KeyCode.","")
-        keyChangeBtn.Text = "🎹 Clica aqui e aperta a tecla"
-        keyChangeBtn.BackgroundColor3 = Color3.fromRGB(40,40,80)
-        listeningForKey = false
-    end
-end)
-
 -- ============================================================
 --  LÓGICA DE OCULTAR / MOSTRAR
 -- ============================================================
 local function ToggleVisibility()
     if MF.Visible then
-        MF.Visible = false
-        ShowBtn.Visible = true
+        MF.Visible = false; ShowBtn.Visible = true
     else
-        MF.Visible = true
-        ShowBtn.Visible = false
+        MF.Visible = true; ShowBtn.Visible = false
     end
 end
 
--- Botão 👁 na barra de título
 HideBtn.MouseButton1Click:Connect(ToggleVisibility)
-
--- Botão flutuante pra reabrir
 ShowBtn.MouseButton1Click:Connect(ToggleVisibility)
 
--- Tecla de teclado
+-- Input unificado: ocultar por tecla + redefinir tecla
 UserInputService.InputBegan:Connect(function(inp, gpe)
+    if inp.UserInputType ~= Enum.UserInputType.Keyboard then return end
+
+    -- redefinindo tecla
+    if listeningForKey then
+        Cfg.HideKey = inp.KeyCode
+        local keyName = tostring(inp.KeyCode):gsub("Enum.KeyCode.","")
+        keyLabel.Text = "⌨  Tecla atual:  "..keyName
+        keyChangeBtn.Text = "🎹 Clica aqui → aperta a tecla"
+        keyChangeBtn.BackgroundColor3 = Color3.fromRGB(40,40,80)
+        listeningForKey = false
+        return
+    end
+
+    -- toggle normal (ignora quando digitando em TextBox)
     if gpe then return end
-    if inp.UserInputType == Enum.UserInputType.Keyboard
-       and inp.KeyCode == Cfg.HideKey then
+    if inp.KeyCode == Cfg.HideKey then
         ToggleVisibility()
     end
 end)
@@ -734,4 +805,4 @@ RunService.RenderStepped:Connect(function()
     if tick%12==0 then UpdateFruitESP(); UpdateDungeonESP(); tick=0 end
 end)
 
-print("[KL v2] Carregado — "..LP.Name)
+print("[KL v2.1] Carregado — "..LP.Name)
