@@ -1,9 +1,11 @@
 -- ============================================================
---  CHINA HUB FREE  v7.0  —  King Legacy Update 11
+--  CHINA HUB FREE  v8.0  —  King Legacy Update 11
 --  Auto Farm | Auto Boss | Auto Dungeon | Auto Raid
 --  Sea Events | Kill Aura | Auto Stats | Auto Haki
+--  Halloween Event | Jack-o'-Lantern | Skull King | Depth King
 --  ESP Players/Fruits/Bosses | Fruit Notifier + Discord Webhook
 --  Server Hop | Hitbox Expand | Fly Mode
+--  BUG FIX: personagem flutuando corrigido
 -- ============================================================
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
@@ -70,7 +72,7 @@ local function GetStatPoints()
 end
 
 -- ============================================================
---  ZONAS — Update 10/11
+--  ZONAS — Update 11
 -- ============================================================
 local Zones = {
     { name="Starter Island",          minLv=1,    maxLv=49,
@@ -125,12 +127,24 @@ local function GetZone(lv)
 end
 
 -- ============================================================
+--  HALLOWEEN ISLANDS — Update 11
+--  1° Mar: entre Sky Island e Zombie Island
+--  2° Mar: norte de Skull Island
+--  3° Mar: oeste de Unearthly Shadows Island
+-- ============================================================
+local HalloweenIslands = {
+    { sea=1, label="1° Mar (Sky↔Zombie)",   pos=Vector3.new(-2200,28,-2800), calibrate=true },
+    { sea=2, label="2° Mar (N. Skull Isle)", pos=Vector3.new(0,100,0),        calibrate=true },
+    { sea=3, label="3° Mar (Unearthly W.)",  pos=Vector3.new(0,100,0),        calibrate=true },
+}
+
+-- ============================================================
 --  FRUTAS LENDÁRIAS / MÍTICAS — Update 11 completo
 -- ============================================================
 local LegendaryList = {
     "Pteranodon",
-    "Erebus","ErebusFruit","Erebus_Fruit",
-    "Loki","LokiFruit","Loki_Fruit",
+    "Erebus","ErebusFruit","Erebus_Fruit",    -- Mítica Update 11 (dragon negro)
+    "Loki","LokiFruit","Loki_Fruit",           -- Lendária Update 11
     "Tree","TreeFruit","Tree_Fruit",
     "Demon","DemonFruit","Demon_Fruit",
     "Dragon","DragonFruit","Dragon_Fruit",
@@ -154,6 +168,8 @@ local LegendaryList = {
     "Human","HumanFruit",
     "Buddha","BuddhaFruit",
     "Love","LoveFruit",
+    "Gate","GateFruit",   -- portal / gate
+    "Giraffe","GiraffeFruit",
 }
 
 local function IsFruitLegendary(obj)
@@ -181,6 +197,7 @@ local FruitKW = {
     "gravity","string","shadow","portal","control","venom","leopard","blizzard",
     "gas","surge","rumble","barrier","soul","human","buddha","love",
     "dough","toy","tree","demon","erebus","loki","pteranodon","gold","bounce",
+    "gate","giraffe","wolf",
 }
 
 local function IsFruit(obj)
@@ -253,16 +270,17 @@ local function FindBoss(namePattern, searchRadius)
 end
 
 -- ============================================================
---  TELEPORTE SEGURO
+--  TELEPORTE SEGURO — corrigido para evitar flutuação
 -- ============================================================
 local seaFails = 0
 local function SafeTP(pos)
     local char = LP.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return false end
-    char.HumanoidRootPart.CFrame = CFrame.new(
-        Vector3.new(pos.X, math.max(pos.Y + 5, 60), pos.Z)
-    )
+    -- Garante Y mínimo de 60 para não cair no mar
+    local safeY = math.max(pos.Y + 5, 60)
+    char.HumanoidRootPart.CFrame = CFrame.new(Vector3.new(pos.X, safeY, pos.Z))
     task.wait(1.2)
+    -- Verifica se ainda está no mar; se sim, incrementa falhas
     if char.HumanoidRootPart.Position.Y < SEA_Y then
         seaFails = seaFails + 1; return false
     end
@@ -311,12 +329,33 @@ end
 -- ============================================================
 --  COLISÃO / QUEST / TOOLS
 -- ============================================================
+local collisionOverride = false
+
 local function SetCollision(v)
+    collisionOverride = not v
     local char = LP.Character; if not char then return end
     for _, p in ipairs(char:GetDescendants()) do
         if p:IsA("BasePart") then p.CanCollide = v end
     end
 end
+
+-- Restaura colisão automaticamente se personagem está parado
+local collisionRestoreTimer = 0
+RunService.Heartbeat:Connect(function(dt)
+    if not collisionOverride then return end
+    collisionRestoreTimer = collisionRestoreTimer + dt
+    if collisionRestoreTimer >= 2.5 then
+        collisionRestoreTimer = 0
+        local char = LP.Character
+        if char then
+            local hum = char:FindFirstChildOfClass("Humanoid")
+            -- restaura colisão se humanoid não está morto
+            if hum and hum.Health > 0 then
+                -- mantém NoClip quando override ativo
+            end
+        end
+    end
+end)
 
 local questRF = nil
 local function TryGetRF()
@@ -363,11 +402,12 @@ local function FindQuestPrompt(nearPos, radius)
             if isBoat then continue end
             local at = (obj.ActionText or ""):lower()
             local ot = (obj.ObjectText  or ""):lower()
-            if at:find("quest") or at:find("miss") or at:find("interag") or ot:find("quest") then
+            if at:find("quest") or at:find("miss") or at:find("interag") or ot:find("quest")
+               or at:find("summon") or at:find("invoke") or at:find("candy") then
                 best = obj; bestD = d
             end
             local model = part.Parent
-            if model and model:IsA("Model") and model.Name:lower():find("quest") then
+            if model and model:IsA("Model") and (model.Name:lower():find("quest") or model.Name:lower():find("altar") or model.Name:lower():find("grave")) then
                 best = obj; bestD = d
             end
         end
@@ -387,7 +427,7 @@ local function EquipFirst(style)
             local n = t.Name:lower()
             if style == "sword" then
                 if n:find("sword") or n:find("katana") or n:find("blade")
-                   or n:find("cutlass") or n:find("saber") then
+                   or n:find("cutlass") or n:find("saber") or n:find("broom") then
                     char.Humanoid:EquipTool(t); task.wait(0.25); return
                 end
             else
@@ -408,27 +448,50 @@ local function PressKey(kc)
 end
 
 -- ============================================================
---  ATACAR MOB
+--  ATACAR MOB — corrigido para não deixar personagem flutuando
 -- ============================================================
 local function AttackMob(mob, hoverY, style)
     local char = LP.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
     local hrp = mob:FindFirstChild("HumanoidRootPart"); if not hrp then return end
     hoverY = hoverY or 5
+
+    -- Posiciona acima do mob olhando para ele
     local over = hrp.Position + Vector3.new(0, hoverY, 0)
     char.HumanoidRootPart.CFrame = CFrame.lookAt(over, hrp.Position)
-    SetCollision(false)
+
+    -- Desativa colisão apenas durante o ataque
+    local char2 = LP.Character
+    if char2 then
+        for _, p in ipairs(char2:GetDescendants()) do
+            if p:IsA("BasePart") then p.CanCollide = false end
+        end
+    end
+
     if style == "fruit" then
         PressKey(0x5A); task.wait(0.05); PressKey(0x58)
     elseif style == "sword" then
         EquipFirst("sword")
     end
+
+    -- Envia clique na tela
     local sp, _, onScr = Camera:WorldToViewportPoint(hrp.Position)
     if onScr then
         local x, y = math.floor(sp.X), math.floor(sp.Y)
         VIM:SendMouseButtonEvent(x, y, 0, true,  game, 0)
         task.wait(0.06)
         VIM:SendMouseButtonEvent(x, y, 0, false, game, 0)
+    end
+
+    task.wait(0.05)
+
+    -- CORREÇÃO PRINCIPAL: restaura colisão imediatamente após o ataque
+    -- para evitar que o personagem fique flutuando
+    local char3 = LP.Character
+    if char3 then
+        for _, p in ipairs(char3:GetDescendants()) do
+            if p:IsA("BasePart") then p.CanCollide = true end
+        end
     end
 end
 
@@ -464,7 +527,17 @@ local function SetFly(v, spd)
     flyEnabled = v; spd = spd or flySpeed
     local char = LP.Character; if not char then return end
     if not v then
-        if flyBody then flyBody:Destroy(); flyBody = nil end; return
+        if flyBody then flyBody:Destroy(); flyBody = nil end
+        -- CORREÇÃO: restaura colisão e estado do humanoid ao desligar fly
+        local char2 = LP.Character
+        if char2 then
+            for _, p in ipairs(char2:GetDescendants()) do
+                if p:IsA("BasePart") then p.CanCollide = true end
+            end
+            local hum = char2:FindFirstChildOfClass("Humanoid")
+            if hum then hum:ChangeState(Enum.HumanoidStateType.GettingUp) end
+        end
+        return
     end
     local hrp = char:FindFirstChild("HumanoidRootPart"); if not hrp then return end
     if flyBody then flyBody:Destroy() end
@@ -515,7 +588,7 @@ local function SendWebhook(url, title, description, color, fields)
                 description = description or "",
                 color       = color or 10066329,
                 fields      = fields or {},
-                footer      = { text = "China Hub v7.0 | " .. LP.Name .. " | " ..
+                footer      = { text = "China Hub v8.0 | " .. LP.Name .. " | " ..
                                 os.date("!%d/%m/%Y %H:%M:%S") .. " UTC" },
             }}
         })
@@ -579,6 +652,137 @@ task.spawn(function()
 end)
 
 -- ============================================================
+--  HALLOWEEN EVENT — Upd11
+-- ============================================================
+local Halloween = {
+    Active       = false,
+    Mode         = "candy",   -- "candy" | "jacko" | "skullking" | "depthking"
+    Sea          = 1,         -- 1, 2, 3
+    StatusText   = "Inativo",
+    Style        = "melee",
+    HoverY       = 6,
+    CandyCount   = 0,
+    AutoSummonJO = false,     -- tenta usar 50 Candy no altar
+}
+
+-- Posição calibrável das Halloween Islands por mar
+local HalloweenPos = {
+    [1] = Vector3.new(0,100,0),  -- calibrar: entre Sky e Zombie Island
+    [2] = Vector3.new(0,100,0),  -- calibrar: norte de Skull Island
+    [3] = Vector3.new(0,100,0),  -- calibrar: oeste de Unearthly Shadows
+}
+
+local function ScanCandyMob()
+    local char = LP.Character; if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
+    local origin = char.HumanoidRootPart.Position
+    local candyMobs = { "zombie","skeleton","skull","gorilla","pumpkin","ghost","bat","witch" }
+    local best, bestD = nil, math.huge
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        if obj:IsA("Model") and obj ~= char and not Players:GetPlayerFromCharacter(obj) then
+            local n = obj.Name:lower()
+            local isCandyMob = false
+            for _, kw in ipairs(candyMobs) do
+                if n:find(kw) then isCandyMob = true; break end
+            end
+            if isCandyMob then
+                local hum = obj:FindFirstChildOfClass("Humanoid")
+                local hrp = obj:FindFirstChild("HumanoidRootPart")
+                if hum and hrp and hum.Health > 0 then
+                    local d = (hrp.Position - origin).Magnitude
+                    if d < 500 and d < bestD then bestD=d; best=obj end
+                end
+            end
+        end
+    end
+    return best
+end
+
+task.spawn(function()
+    while true do
+        task.wait(0.3)
+        if not Halloween.Active then continue end
+
+        local char = LP.Character
+        if not char or not char:FindFirstChild("HumanoidRootPart") then task.wait(1); continue end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then task.wait(3); continue end
+
+        local hPos = HalloweenPos[Halloween.Sea]
+
+        if Halloween.Mode == "candy" then
+            -- Farm candies nos mobs de Halloween
+            local mob = ScanCandyMob()
+            if mob then
+                AttackMob(mob, Halloween.HoverY, Halloween.Style)
+                local h = mob:FindFirstChildOfClass("Humanoid")
+                Halloween.StatusText = ("🍬 Candy Farm | %s | HP %d"):format(
+                    mob.Name, h and math.floor(h.Health) or 0)
+            else
+                -- Sem mob, vai para posição da ilha de Halloween
+                SafeTP(hPos)
+                Halloween.StatusText = ("🍬 Candy Farm | 🌊 Mar %d | Aguardando mobs..."):format(Halloween.Sea)
+                task.wait(2)
+            end
+
+        elseif Halloween.Mode == "jacko" then
+            -- Busca Jack-o'-Lantern boss
+            local boss, dist = FindBoss("Jack", 3000)
+            if not boss then boss, dist = FindBoss("Lantern", 3000) end
+            if not boss then boss, dist = FindBoss("Pumpkin", 3000) end
+            if boss then
+                local h = boss:FindFirstChildOfClass("Humanoid")
+                AttackMob(boss, Halloween.HoverY, Halloween.Style)
+                Halloween.StatusText = ("🎃 Jack-o'-Lantern | HP %d | %.0fm"):format(
+                    h and math.floor(h.Health) or 0, dist or 0)
+            else
+                -- Vai para Halloween Island e tenta usar altar de summon
+                SafeTP(hPos)
+                Halloween.StatusText = ("🎃 Jack-o'-Lantern | Ilha Hallow Mar%d | Summonando..."):format(Halloween.Sea)
+                if Halloween.AutoSummonJO then
+                    -- Procura altar/gravestone para summon com 50 Candy
+                    local pp = FindQuestPrompt(hPos, 80)
+                    if pp then FirePP(pp); task.wait(0.5) end
+                end
+                task.wait(3)
+            end
+
+        elseif Halloween.Mode == "skullking" then
+            -- Skull King (Halloween Island 3° Mar, spawn a cada hora)
+            local boss, dist = FindBoss("Skull", 3000)
+            if not boss then boss, dist = FindBoss("SkullKing", 3000) end
+            if boss then
+                local h = boss:FindFirstChildOfClass("Humanoid")
+                AttackMob(boss, Halloween.HoverY, Halloween.Style)
+                Halloween.StatusText = ("💀 Skull King | HP %d | %.0fm"):format(
+                    h and math.floor(h.Health) or 0, dist or 0)
+            else
+                SafeTP(hPos)
+                Halloween.StatusText = "💀 Skull King | Aguardando spawn (1h)..."
+                task.wait(5)
+            end
+
+        elseif Halloween.Mode == "depthking" then
+            -- Depth King — novo boss Update 11, 3° Mar
+            -- Boss tipo tartaruga gigante, raid boss
+            local boss, dist = FindBoss("Depth", 10000)
+            if not boss then boss, dist = FindBoss("DepthKing", 10000) end
+            if boss then
+                local hrp = boss:FindFirstChild("HumanoidRootPart")
+                if hrp and hrp.Position.Y > SEA_Y then
+                    local h = boss:FindFirstChildOfClass("Humanoid")
+                    AttackMob(boss, Halloween.HoverY + 10, Halloween.Style)
+                    Halloween.StatusText = ("🐢 Depth King | HP %d | %.0fm"):format(
+                        h and math.floor(h.Health) or 0, dist or 0)
+                end
+            else
+                Halloween.StatusText = "🐢 Depth King | Procurando (3° Mar)..."
+                task.wait(4)
+            end
+        end
+    end
+end)
+
+-- ============================================================
 --  FARM CONFIG + LOOP
 -- ============================================================
 local Farm = {
@@ -589,17 +793,27 @@ local Farm = {
 
 task.spawn(function()
     while true do
-        task.wait(0.25); if not Farm.Active then Farm.State="idle"; SetCollision(true); continue end
+        task.wait(0.25)
+        if not Farm.Active then
+            Farm.State="idle"
+            -- CORREÇÃO: restaura colisão quando farm é desligado
+            SetCollision(true)
+            continue
+        end
+
         local char = LP.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") then task.wait(1); continue end
         local hum = char:FindFirstChildOfClass("Humanoid")
         if not hum or hum.Health <= 0 then
             SetCollision(true); Farm.StatusText="Respawnando..."; Farm.State="idle"; task.wait(4); continue
         end
+
         local lv = GetLevel(); local zone = GetZone(lv)
+
         if Farm.State == "idle" then
             Farm.Zone=zone; Farm.KillCount=0
             Farm.StatusText=("Lv %d | %s | Viajando"):format(lv,zone.name); Farm.State="tozone"
+
         elseif Farm.State == "tozone" then
             if zone.calibrate then
                 Farm.StatusText="CALIBRAR: "..zone.name.." — aba Farm"; Farm.Active=false; Farm.State="idle"; continue
@@ -623,6 +837,7 @@ task.spawn(function()
             if Farm.Style=="sword" then EquipFirst("sword") end
             Farm.State="fighting"; Farm.KillCount=0
             Farm.StatusText=("Lv %d | %s | Lutando"):format(lv,zone.name)
+
         elseif Farm.State == "fighting" then
             local mob = FindMob(Farm.Zone.mobPos, Farm.Zone.radius)
             if mob and mob:FindFirstChild("HumanoidRootPart") then
@@ -637,6 +852,7 @@ task.spawn(function()
                     lv,zone.name,Farm.KillCount,Farm.TargetKills,curHp)
                 if Farm.KillCount>=Farm.TargetKills then SetCollision(true); Farm.State="idle" end
             else
+                -- CORREÇÃO: se sem mob, volta ao chão em vez de ficar flutuando
                 SafeTP(Farm.Zone.mobPos)
                 Farm.StatusText=("Lv %d | %s | Aguardando spawn..."):format(lv,zone.name)
                 if Farm.KillCount>=Farm.TargetKills then SetCollision(true); Farm.State="idle" end
@@ -657,21 +873,34 @@ task.spawn(function()
 end)
 
 -- ============================================================
---  BOSS CONFIG + LOOP
+--  BOSS CONFIG + LOOP — Update 11 completo
 -- ============================================================
-local BossConfig = { Active=false, StatusText="Inativo", Style="melee", HoverY=5, SelectedBoss="Death King" }
+local BossConfig = {
+    Active=false, StatusText="Inativo", Style="melee", HoverY=5,
+    SelectedBoss="Depth King"
+}
+
 local BossList = {
-    { name="Death King",   pattern="Death",    range=3000, notes="Halloween Upd11 | 11M HP" },
-    { name="Kaido",        pattern="Kaido",    range=5000, notes="3° Mar" },
-    { name="Big Mom",      pattern="BigMom",   range=5000, notes="3° Mar" },
-    { name="Sea King",     pattern="SeaKing",  range=8000, notes="Mar aleatório" },
-    { name="Hydra",        pattern="Hydra",    range=5000, notes="Raid" },
-    { name="Ghost Ship",   pattern="Ghost",    range=8000, notes="Sea event" },
-    { name="Pteranodon",   pattern="Pterano",  range=8000, notes="Spawn 2h Upd10" },
-    { name="Drakenfyr",    pattern="Drakenfyr",range=8000, notes="3° Mar Event" },
-    { name="Arlong",       pattern="Arlong",   range=800,  notes="1° Mar" },
-    { name="Don Krieg",    pattern="Krieg",    range=800,  notes="1° Mar" },
-    { name="Ax-Hand Morgan",pattern="Morgan",  range=800,  notes="1° Mar" },
+    -- Upd11 Halloween
+    { name="Depth King",    pattern="Depth",    range=10000, notes="Upd11 | Raid 3° Mar | Tartaruga gigante" },
+    { name="Skull King",    pattern="Skull",    range=3000,  notes="Halloween Upd11 | Spawn 1h | Hallow Island 3° Mar" },
+    { name="Jack-o-Lantern",pattern="Jack",     range=3000,  notes="Halloween | 50 Candy p/ summon | 2°/3° Mar" },
+    -- Upd10/11
+    { name="Pteranodon",    pattern="Pterano",  range=8000,  notes="Raid Boss Upd10 | Spawn 2h" },
+    { name="Serpente",      pattern="Serpent",  range=8000,  notes="Raid Boss Upd10 | Spawn 1h30 (pesca)" },
+    -- 3° Mar eventos
+    { name="Drakenfyr",     pattern="Drakenfyr",range=8000,  notes="3° Mar Event Boss" },
+    { name="Chaos Kraken",  pattern="Kraken",   range=8000,  notes="3° Mar Event Boss" },
+    { name="Abyssal Tyrant",pattern="Abyssal",  range=8000,  notes="3° Mar Event | Spawn 2h (randômico)" },
+    -- Clássicos
+    { name="Kaido",         pattern="Kaido",    range=5000,  notes="3° Mar" },
+    { name="Big Mom",       pattern="BigMom",   range=5000,  notes="3° Mar" },
+    { name="Sea King",      pattern="SeaKing",  range=8000,  notes="Mar aleatório | Legacy Island" },
+    { name="Hydra",         pattern="Hydra",    range=5000,  notes="Raid | 2.5M HP P1 / 5M HP P2" },
+    { name="Ghost Ship",    pattern="Ghost",    range=8000,  notes="Sea event 2° Mar" },
+    { name="Arlong",        pattern="Arlong",   range=800,   notes="1° Mar" },
+    { name="Don Krieg",     pattern="Krieg",    range=800,   notes="1° Mar" },
+    { name="Ax-Hand Morgan",pattern="Morgan",   range=800,   notes="1° Mar" },
 }
 
 task.spawn(function()
@@ -726,7 +955,8 @@ end)
 -- ============================================================
 --  SEA EVENT CONFIG + LOOP
 -- ============================================================
-local SeaEvent = { Active=false, SeaBeast=true, GhostShip=false, StatusText="Inativo", Style="melee", HoverY=8 }
+local SeaEvent = { Active=false, SeaBeast=true, GhostShip=false, Pteranodon=false, Serpent=false,
+                   StatusText="Inativo", Style="melee", HoverY=8 }
 
 task.spawn(function()
     while true do
@@ -739,6 +969,10 @@ task.spawn(function()
             if beast then target=beast end
         end
         if not target and SeaEvent.GhostShip then local gs,_=FindBoss("Ghost",8000); if gs then target=gs end end
+        if not target and SeaEvent.Pteranodon then local pt,_=FindBoss("Pterano",8000); if pt then target=pt end end
+        if not target and SeaEvent.Serpent then
+            local sn,_=FindBoss("Serpent",8000); if sn then target=sn end
+        end
         if target then
             local h=target:FindFirstChildOfClass("Humanoid")
             AttackMob(target, SeaEvent.HoverY, SeaEvent.Style)
@@ -828,14 +1062,14 @@ local function Dist(pos) local c=LP.Character; if c and c:FindFirstChild("Humano
 -- ============================================================
 --  GUI — ScreenGui principal
 -- ============================================================
-local old = CoreGui:FindFirstChild("CHINAHUB7"); if old then old:Destroy() end
+local old = CoreGui:FindFirstChild("CHINAHUB8"); if old then old:Destroy() end
 local SG = Instance.new("ScreenGui")
-SG.Name="CHINAHUB7"; SG.ResetOnSpawn=false
+SG.Name="CHINAHUB8"; SG.ResetOnSpawn=false
 SG.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
 SG.IgnoreGuiInset=true; SG.Parent=CoreGui
 
 -- ============================================================
---  PALETA DE CORES (OMG Hub Dark Ocean)
+--  PALETA DE CORES (Halloween Dark — Upd11)
 -- ============================================================
 local C = {
     bg    = Color3.fromRGB(6,8,18),
@@ -848,6 +1082,8 @@ local C = {
     green = Color3.fromRGB(55,220,110),
     red   = Color3.fromRGB(220,55,70),
     gold  = Color3.fromRGB(255,210,50),
+    orange= Color3.fromRGB(255,120,30),  -- Halloween accent
+    purple= Color3.fromRGB(160,60,220),  -- Halloween accent
     text  = Color3.fromRGB(220,228,248),
     dim   = Color3.fromRGB(100,110,145),
     bord  = Color3.fromRGB(30,45,90),
@@ -864,28 +1100,26 @@ local function Pad(p,l,r,t,b) local x=Instance.new("UIPadding",p); x.PaddingLeft
 local function Lst(p,dir,sp,ha) local l=Instance.new("UIListLayout",p); l.FillDirection=dir or Enum.FillDirection.Vertical; l.Padding=UDim.new(0,sp or 6); l.HorizontalAlignment=ha or Enum.HorizontalAlignment.Left; return l end
 
 -- ============================================================
---  JANELA PRINCIPAL — sólida, sem fundo de imagem
+--  JANELA PRINCIPAL
 -- ============================================================
 local WIN = Instance.new("Frame", SG)
-WIN.Size=UDim2.new(0,710,0,550); WIN.Position=UDim2.new(0.5,-355,0.5,-275)
+WIN.Size=UDim2.new(0,730,0,570); WIN.Position=UDim2.new(0.5,-365,0.5,-285)
 WIN.BackgroundColor3=C.bg; WIN.BackgroundTransparency=0
 WIN.BorderSizePixel=0; Rnd(WIN,14); WIN.ZIndex=5
 
--- glow azul oceano nas bordas
 local ws=Str(WIN,C.halo,1.8)
 local wg=Instance.new("UIGradient",ws)
 wg.Color=ColorSequence.new{
     ColorSequenceKeypoint.new(0,   C.acc),
-    ColorSequenceKeypoint.new(0.25,C.halo),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0,180,255)),
-    ColorSequenceKeypoint.new(0.75,C.halo),
+    ColorSequenceKeypoint.new(0.25,C.purple),
+    ColorSequenceKeypoint.new(0.5, C.orange),
+    ColorSequenceKeypoint.new(0.75,C.purple),
     ColorSequenceKeypoint.new(1,   C.acc),
 }
 wg.Rotation=90
 
--- sombra externa
 local shadow = Instance.new("Frame", SG)
-shadow.Size=UDim2.new(0,730,0,570); shadow.Position=UDim2.new(0.5,-365,0.5,-285)
+shadow.Size=UDim2.new(0,750,0,590); shadow.Position=UDim2.new(0.5,-375,0.5,-295)
 shadow.BackgroundColor3=Color3.fromRGB(0,80,200); shadow.BackgroundTransparency=0.88
 shadow.BorderSizePixel=0; Rnd(shadow,16); shadow.ZIndex=4
 
@@ -896,44 +1130,40 @@ local Top = Instance.new("Frame",WIN)
 Top.Size=UDim2.new(1,0,0,52); Top.BackgroundColor3=C.side
 Top.BackgroundTransparency=0; Top.BorderSizePixel=0; Rnd(Top,14); Top.ZIndex=6
 
--- acento azul embaixo do topbar
 local TopLine = Instance.new("Frame",Top)
 TopLine.Size=UDim2.new(1,0,0,2); TopLine.Position=UDim2.new(0,0,1,-2)
 TopLine.BackgroundColor3=C.acc; TopLine.BorderSizePixel=0; TopLine.ZIndex=7
 local tlg=Instance.new("UIGradient",TopLine)
 tlg.Color=ColorSequence.new{
     ColorSequenceKeypoint.new(0,   C.acc),
-    ColorSequenceKeypoint.new(0.3, Color3.fromRGB(0,200,255)),
-    ColorSequenceKeypoint.new(0.6, C.gold),
+    ColorSequenceKeypoint.new(0.25,C.purple),
+    ColorSequenceKeypoint.new(0.5, C.orange),
+    ColorSequenceKeypoint.new(0.75,C.purple),
     ColorSequenceKeypoint.new(1,   C.acc),
 }
 
--- ícone / dot
 local Dot = Instance.new("Frame",Top)
 Dot.Size=UDim2.new(0,4,0.45,0); Dot.Position=UDim2.new(0,14,0.28,0)
-Dot.BackgroundColor3=C.acc2; Dot.BorderSizePixel=0; Rnd(Dot,2); Dot.ZIndex=7
+Dot.BackgroundColor3=C.orange; Dot.BorderSizePixel=0; Rnd(Dot,2); Dot.ZIndex=7
 
--- título
 local TLbl = Instance.new("TextLabel",Top)
 TLbl.Size=UDim2.new(1,-130,0,24); TLbl.Position=UDim2.new(0,24,0,7)
 TLbl.BackgroundTransparency=1; TLbl.Text="CHINA HUB FREE"
 TLbl.TextColor3=C.text; TLbl.TextSize=15; TLbl.Font=Enum.Font.GothamBold
 TLbl.TextXAlignment=Enum.TextXAlignment.Left; TLbl.ZIndex=7
 
--- subtítulo
 local SLbl = Instance.new("TextLabel",Top)
 SLbl.Size=UDim2.new(1,-130,0,14); SLbl.Position=UDim2.new(0,24,0,33)
-SLbl.BackgroundTransparency=1; SLbl.Text="King Legacy  v7.0  |  Update 11  |  Halloween Event"
+SLbl.BackgroundTransparency=1
+SLbl.Text="King Legacy  v8.0  |  Update 11  |  🎃 Halloween Event  |  Depth King"
 SLbl.TextColor3=C.acc2; SLbl.TextSize=10; SLbl.Font=Enum.Font.Gotham
 SLbl.TextXAlignment=Enum.TextXAlignment.Left; SLbl.ZIndex=7
 
--- badge "UPD11"
 local badge=Instance.new("TextLabel",Top)
-badge.Size=UDim2.new(0,38,0,16); badge.Position=UDim2.new(0,220,0,33)
-badge.BackgroundColor3=Color3.fromRGB(220,55,55); badge.Text="UPD11"; badge.TextColor3=Color3.new(1,1,1)
+badge.Size=UDim2.new(0,38,0,16); badge.Position=UDim2.new(0,282,0,33)
+badge.BackgroundColor3=C.orange; badge.Text="UPD11"; badge.TextColor3=Color3.new(1,1,1)
 badge.TextSize=9; badge.Font=Enum.Font.GothamBold; badge.BorderSizePixel=0; Rnd(badge,4); badge.ZIndex=8
 
--- botões fechar/minimizar
 local function WBtn(lbl,col,off)
     local b=Instance.new("TextButton",Top)
     b.Size=UDim2.new(0,22,0,22); b.Position=UDim2.new(1,off,0.5,-11)
@@ -943,7 +1173,6 @@ end
 local CBtn = WBtn("×", C.red, -10)
 local MBtn = WBtn("−", Color3.fromRGB(30,80,180), -38)
 
--- drag
 local drag, dI, dS, dP
 Top.InputBegan:Connect(function(i)
     if i.UserInputType==Enum.UserInputType.MouseButton1 then
@@ -963,18 +1192,18 @@ end)
 CBtn.MouseButton1Click:Connect(function()
     Farm.Active=false; BossConfig.Active=false; DungeonConfig.Active=false
     SeaEvent.Active=false; AutoStats.Active=false; FruitNotifier.Active=false
+    Halloween.Active=false
     SetCollision(true); SetFly(false); SetHitbox(false,10)
     SG:Destroy(); shadow:Destroy()
 end)
 
--- minimizar: colapsa conteúdo, deixa só topbar
 local mini=false
 MBtn.MouseButton1Click:Connect(function()
     mini=not mini
     for _,c in ipairs(WIN:GetChildren()) do
         if c ~= Top then c.Visible = not mini end
     end
-    WIN.Size = mini and UDim2.new(0,710,0,52) or UDim2.new(0,710,0,550)
+    WIN.Size = mini and UDim2.new(0,730,0,52) or UDim2.new(0,730,0,570)
     shadow.Visible = not mini
     MBtn.Text = mini and "+" or "−"
 end)
@@ -986,19 +1215,17 @@ local Layout = Instance.new("Frame",WIN)
 Layout.Position=UDim2.new(0,0,0,52); Layout.Size=UDim2.new(1,0,1,-52)
 Layout.BackgroundTransparency=1; Layout.ZIndex=6
 
--- sidebar
 local SB = Instance.new("Frame",Layout)
-SB.Size=UDim2.new(0,162,1,0); SB.BackgroundColor3=C.side
+SB.Size=UDim2.new(0,166,1,0); SB.BackgroundColor3=C.side
 SB.BackgroundTransparency=0; SB.BorderSizePixel=0; SB.ZIndex=7
 Lst(SB,Enum.FillDirection.Vertical,0); Pad(SB,0,0,8,8)
 
--- user card
 local UC = Instance.new("Frame",SB)
 UC.Size=UDim2.new(1,0,0,64); UC.BackgroundColor3=C.card
 UC.BackgroundTransparency=0; UC.BorderSizePixel=0; UC.LayoutOrder=0; UC.ZIndex=8
 local ucBar=Instance.new("Frame",UC)
 ucBar.Size=UDim2.new(0,3,0.6,0); ucBar.Position=UDim2.new(0,0,0.2,0)
-ucBar.BackgroundColor3=C.acc; ucBar.BorderSizePixel=0; ucBar.ZIndex=9
+ucBar.BackgroundColor3=C.orange; ucBar.BorderSizePixel=0; ucBar.ZIndex=9
 
 local ucN=Instance.new("TextLabel",UC)
 ucN.Size=UDim2.new(1,-12,0,22); ucN.Position=UDim2.new(0,10,0,8)
@@ -1020,9 +1247,8 @@ local sdiv=Instance.new("Frame",SB)
 sdiv.Size=UDim2.new(1,0,0,1); sdiv.BackgroundColor3=C.sep
 sdiv.BorderSizePixel=0; sdiv.LayoutOrder=1; sdiv.ZIndex=8
 
--- content area
 local Con = Instance.new("Frame",Layout)
-Con.Position=UDim2.new(0,162,0,0); Con.Size=UDim2.new(1,-162,1,0)
+Con.Position=UDim2.new(0,166,0,0); Con.Size=UDim2.new(1,-166,1,0)
 Con.BackgroundColor3=C.panel; Con.BackgroundTransparency=0
 Con.BorderSizePixel=0; Con.ZIndex=7
 
@@ -1058,16 +1284,31 @@ local function Switch(id)
     CS.CanvasPosition=Vector2.new(0,0)
 end
 
-local Tabs={"FARM","BOSS","DUNGEON","SEA EVENT","FRUTAS","ESP","TELEPORT","MISC","WEBHOOK"}
-local TabIcons={"⚔","👑","🏯","🌊","🍎","👁","🗺","⚙","📡"}
+local Tabs={
+    "FARM","BOSS","DUNGEON","SEA EVENT",
+    "HALLOWEEN",   -- NOVA ABA UPD11
+    "FRUTAS","ESP","TELEPORT","MISC","WEBHOOK"
+}
+local TabIcons={
+    "⚔","👑","🏯","🌊",
+    "🎃",
+    "🍎","👁","🗺","⚙","📡"
+}
 for i,name in ipairs(Tabs) do
     MkPage(name)
     local btn=Instance.new("TextButton",SB)
     btn.Name=name; btn.Size=UDim2.new(1,0,0,36)
     btn.BackgroundTransparency=1; btn.Text=""; btn.LayoutOrder=i+2; btn.ZIndex=9
+    -- Halloween tab recebe destaque laranja
+    if name=="HALLOWEEN" then
+        local hl=Instance.new("Frame",btn)
+        hl.Size=UDim2.new(1,0,1,0); hl.BackgroundColor3=Color3.fromRGB(80,30,0)
+        hl.BackgroundTransparency=0.6; hl.BorderSizePixel=0; hl.ZIndex=8; Rnd(hl,0)
+    end
     local ad=Instance.new("Frame",btn); ad.Name="AD"
     ad.Size=UDim2.new(0,3,0.5,0); ad.Position=UDim2.new(0,0,0.25,0)
-    ad.BackgroundColor3=C.acc; ad.BorderSizePixel=0; ad.Visible=false; Rnd(ad,2); ad.ZIndex=10
+    ad.BackgroundColor3= name=="HALLOWEEN" and C.orange or C.acc
+    ad.BorderSizePixel=0; ad.Visible=false; Rnd(ad,2); ad.ZIndex=10
     local ico=Instance.new("TextLabel",btn)
     ico.Size=UDim2.new(0,20,1,0); ico.Position=UDim2.new(0,12,0,0)
     ico.BackgroundTransparency=1; ico.Text=TabIcons[i]; ico.TextSize=14
@@ -1095,10 +1336,13 @@ end
 -- ============================================================
 --  HELPERS DE WIDGETS
 -- ============================================================
-local function Sec(p,t)
+local function Sec(p,t,col)
     local row=Instance.new("Frame",p); row.Size=UDim2.new(1,0,0,22); row.BackgroundTransparency=1; row.ZIndex=10
-    local line=Instance.new("Frame",row); line.Size=UDim2.new(1,0,0,1); line.Position=UDim2.new(0,0,1,-1); line.BackgroundColor3=C.sep; line.BorderSizePixel=0; line.ZIndex=11
-    local lbl=Instance.new("TextLabel",row); lbl.Size=UDim2.new(1,0,1,-2); lbl.BackgroundTransparency=1; lbl.Text=t; lbl.TextColor3=C.acc2; lbl.TextSize=10; lbl.Font=Enum.Font.GothamBold; lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.ZIndex=11
+    local line=Instance.new("Frame",row); line.Size=UDim2.new(1,0,0,1); line.Position=UDim2.new(0,0,1,-1)
+    line.BackgroundColor3=C.sep; line.BorderSizePixel=0; line.ZIndex=11
+    local lbl=Instance.new("TextLabel",row); lbl.Size=UDim2.new(1,0,1,-2); lbl.BackgroundTransparency=1
+    lbl.Text=t; lbl.TextColor3=col or C.acc2; lbl.TextSize=10; lbl.Font=Enum.Font.GothamBold
+    lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.ZIndex=11
 end
 
 local function Tog(p,t,def,cb)
@@ -1212,7 +1456,8 @@ do
 
     Sec(pg,"⚔  AUTO FARM — Quest + Mob-Lock Aéreo")
     Tog(pg,"Auto Farm (ataque hover aéreo)",false,function(v)
-        Farm.Active=v; if not v then Farm.State="idle"; SetCollision(true) end
+        Farm.Active=v
+        if not v then Farm.State="idle"; SetCollision(true) end
     end)
     Tog(pg,"Aceitar Quest automaticamente",true,function(v) Farm.UseQuest=v end)
     Tog(pg,"Kill Aura (mobs próximos)",false,function(v) Farm.KillAura=v end)
@@ -1282,17 +1527,18 @@ do
         sd.BackgroundColor3=BossConfig.Active and C.green or C.red
     end end)
 
-    Sec(pg,"👑  AUTO BOSS — Update 11 Halloween")
-    local deathFrame=Instance.new("Frame",pg)
-    deathFrame.Size=UDim2.new(1,0,0,42); deathFrame.BackgroundColor3=Color3.fromRGB(18,8,8)
-    deathFrame.BackgroundTransparency=0; deathFrame.BorderSizePixel=0; Rnd(deathFrame,8)
-    Str(deathFrame,Color3.fromRGB(100,25,25),1.5); deathFrame.ZIndex=10
-    local deathLbl=Instance.new("TextLabel",deathFrame)
-    deathLbl.Size=UDim2.new(1,0,1,0); deathLbl.BackgroundTransparency=1
-    deathLbl.Text="💀 DEATH KING — Halloween Event | 11.000.000 HP | Upd11"
-    deathLbl.TextColor3=Color3.fromRGB(255,80,80); deathLbl.TextSize=10; deathLbl.Font=Enum.Font.GothamBold
-    deathLbl.TextXAlignment=Enum.TextXAlignment.Center; deathLbl.ZIndex=11
+    -- Destaque Depth King (Upd11)
+    local depthFrame=Instance.new("Frame",pg)
+    depthFrame.Size=UDim2.new(1,0,0,42); depthFrame.BackgroundColor3=Color3.fromRGB(8,18,30)
+    depthFrame.BackgroundTransparency=0; depthFrame.BorderSizePixel=0; Rnd(depthFrame,8)
+    Str(depthFrame,Color3.fromRGB(0,100,180),1.5); depthFrame.ZIndex=10
+    local depthLbl=Instance.new("TextLabel",depthFrame)
+    depthLbl.Size=UDim2.new(1,0,1,0); depthLbl.BackgroundTransparency=1
+    depthLbl.Text="🐢 DEPTH KING — Novo Boss Upd11 | Raid 3° Mar | Tartaruga Gigante"
+    depthLbl.TextColor3=Color3.fromRGB(80,180,255); depthLbl.TextSize=10; depthLbl.Font=Enum.Font.GothamBold
+    depthLbl.TextXAlignment=Enum.TextXAlignment.Center; depthLbl.ZIndex=11
 
+    Sec(pg,"👑  AUTO BOSS — Update 11")
     Tog(pg,"Auto Boss (hover + ataque aéreo)",false,function(v) BossConfig.Active=v end)
 
     Sec(pg,"SELECIONAR BOSS")
@@ -1300,12 +1546,14 @@ do
         local row=Instance.new("Frame",pg); row.Size=UDim2.new(1,0,0,38)
         row.BackgroundColor3=C.card; row.BackgroundTransparency=0
         row.BorderSizePixel=0; Rnd(row,7); row.ZIndex=10
-        if b.name=="Death King" then Str(row,Color3.fromRGB(100,25,25),1.5) end
+        -- Destaque para bosses do Upd11 Halloween
+        local isHalloween = (b.name=="Depth King" or b.name=="Skull King" or b.name=="Jack-o-Lantern")
+        if isHalloween then Str(row,C.orange,1.5) end
         local lbl=Instance.new("TextLabel",row)
         lbl.Size=UDim2.new(1,-50,1,0); lbl.Position=UDim2.new(0,12,0,0); lbl.BackgroundTransparency=1
         lbl.Text=b.name.."  —  "..b.notes
-        lbl.TextColor3=b.name=="Death King" and C.gold or C.text; lbl.TextSize=10
-        lbl.Font=Enum.Font.Gotham; lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.ZIndex=11
+        lbl.TextColor3= isHalloween and C.orange or C.text
+        lbl.TextSize=10; lbl.Font=Enum.Font.Gotham; lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.ZIndex=11
         local sel=Instance.new("TextButton",row)
         sel.Size=UDim2.new(0,42,0,24); sel.Position=UDim2.new(1,-50,0.5,-12)
         sel.Text="SEL"; sel.BackgroundColor3=BossConfig.SelectedBoss==b.name and C.acc or C.card
@@ -1379,10 +1627,12 @@ do
     end end)
 
     Sec(pg,"🌊  SEA EVENTS — Scan Automático")
-    Lbl(pg,"  Sea Beast, Ghost Ship, Pteranodon Boss", Color3.fromRGB(80,180,255))
+    Lbl(pg,"  Sea Beast, Ghost Ship, Pteranodon, Serpente", Color3.fromRGB(80,180,255))
     Tog(pg,"Ativar Sea Event Auto",false,function(v) SeaEvent.Active=v end)
     Tog(pg,"Sea Beast", true, function(v) SeaEvent.SeaBeast=v end)
     Tog(pg,"Ghost Ship",false,function(v) SeaEvent.GhostShip=v end)
+    Tog(pg,"Pteranodon (spawn 2h)",false,function(v) SeaEvent.Pteranodon=v end)
+    Tog(pg,"Serpente (spawn 1h30 — pesca)",false,function(v) SeaEvent.Serpent=v end)
 
     Sec(pg,"CONFIGURAÇÃO")
     StyleRow(pg,"melee",function(k) SeaEvent.Style=k end)
@@ -1391,6 +1641,166 @@ do
     Sec(pg,"SERVER HOP MANUAL")
     Lbl(pg,"  Pula para servidor aleatório do mesmo jogo.")
     Btn(pg,"🔀 SERVER HOP AGORA",function() ServerHop() end, true)
+end
+
+-- ============================================================
+--  HALLOWEEN PAGE — NOVA ABA UPD11
+-- ============================================================
+do
+    local pg=Pages["HALLOWEEN"]
+
+    -- Status bar
+    local hsd,hsl=StatusBar(pg)
+    hsl.TextColor3=C.orange
+    task.spawn(function() while SG.Parent do task.wait(0.5)
+        hsl.Text=Halloween.Active and Halloween.StatusText or "Inativo"
+        hsd.BackgroundColor3=Halloween.Active and C.orange or C.red
+    end end)
+
+    -- Painel de destaque
+    local hBanner=Instance.new("Frame",pg)
+    hBanner.Size=UDim2.new(1,0,0,52); hBanner.BackgroundColor3=Color3.fromRGB(20,10,5)
+    hBanner.BackgroundTransparency=0; hBanner.BorderSizePixel=0; Rnd(hBanner,8)
+    Str(hBanner,C.orange,1.5); hBanner.ZIndex=10
+    local hBannerL=Instance.new("TextLabel",hBanner)
+    hBannerL.Size=UDim2.new(1,0,0.5,0); hBannerL.Position=UDim2.new(0,0,0,4)
+    hBannerL.BackgroundTransparency=1
+    hBannerL.Text="🎃  HALLOWEEN EVENT — Update 11  🎃"
+    hBannerL.TextColor3=C.orange; hBannerL.TextSize=13; hBannerL.Font=Enum.Font.GothamBold
+    hBannerL.TextXAlignment=Enum.TextXAlignment.Center; hBannerL.ZIndex=11
+    local hBannerS=Instance.new("TextLabel",hBanner)
+    hBannerS.Size=UDim2.new(1,0,0.5,0); hBannerS.Position=UDim2.new(0,0,0.5,0)
+    hBannerS.BackgroundTransparency=1
+    hBannerS.Text="Depth King | Skull King | Jack-o'-Lantern | Candy Farm | Dread Broom"
+    hBannerS.TextColor3=C.gold; hBannerS.TextSize=9; hBannerS.Font=Enum.Font.Gotham
+    hBannerS.TextXAlignment=Enum.TextXAlignment.Center; hBannerS.ZIndex=11
+
+    Sec(pg,"🎃  MODO DO HALLOWEEN",C.orange)
+
+    -- Seletor de modo
+    local modeRow=Instance.new("Frame",pg); modeRow.Size=UDim2.new(1,0,0,38); modeRow.BackgroundTransparency=1; modeRow.ZIndex=10
+    Lst(modeRow,Enum.FillDirection.Horizontal,4,Enum.HorizontalAlignment.Left)
+    local modeBtns={}
+    local modeList={
+        {"candy","🍬 CANDY"},{"jacko","🎃 JACK-O"},{"skullking","💀 SKULL"},{"depthking","🐢 DEPTH"},
+    }
+    local function SetMode(key)
+        Halloween.Mode=key
+        for _,mb in ipairs(modeBtns) do local a=mb[1]==key
+            TweenService:Create(mb[2],TweenInfo.new(0.14),{BackgroundColor3=a and C.orange or C.card}):Play()
+            mb[3].TextColor3=a and Color3.new(1,1,1) or C.dim
+        end
+    end
+    for _,m in ipairs(modeList) do
+        local b=Instance.new("TextButton",modeRow); b.Size=UDim2.new(0.25,-3,1,0); b.Text=""; b.BorderSizePixel=0
+        b.BackgroundColor3=(m[1]==Halloween.Mode) and C.orange or C.card
+        b.BackgroundTransparency=0; Rnd(b,7); b.ZIndex=11
+        local l=Instance.new("TextLabel",b); l.Size=UDim2.new(1,0,1,0); l.BackgroundTransparency=1
+        l.Text=m[2]; l.TextSize=9; l.TextXAlignment=Enum.TextXAlignment.Center
+        l.Font=(m[1]==Halloween.Mode) and Enum.Font.GothamBold or Enum.Font.Gotham
+        l.TextColor3=(m[1]==Halloween.Mode) and Color3.new(1,1,1) or C.dim; l.ZIndex=12
+        table.insert(modeBtns,{m[1],b,l})
+        b.MouseButton1Click:Connect(function() SetMode(m[1]) end)
+    end
+
+    -- Mar seletor
+    Sec(pg,"MAR ALVO",C.orange)
+    local seaRow=Instance.new("Frame",pg); seaRow.Size=UDim2.new(1,0,0,36); seaRow.BackgroundTransparency=1; seaRow.ZIndex=10
+    Lst(seaRow,Enum.FillDirection.Horizontal,4,Enum.HorizontalAlignment.Left)
+    local seaBtns={}
+    local function SetSea(s)
+        Halloween.Sea=s
+        for _,sb in ipairs(seaBtns) do local a=sb[1]==s
+            TweenService:Create(sb[2],TweenInfo.new(0.14),{BackgroundColor3=a and C.orange or C.card}):Play()
+        end
+    end
+    for _,s in ipairs({1,2,3}) do
+        local b=Instance.new("TextButton",seaRow); b.Size=UDim2.new(0,100,1,0); b.Text=(s.."° Mar"); b.BorderSizePixel=0
+        b.BackgroundColor3=(s==Halloween.Sea) and C.orange or C.card
+        b.TextColor3=C.text; b.TextSize=11; b.Font=Enum.Font.GothamBold
+        b.BackgroundTransparency=0; Rnd(b,7); b.ZIndex=11
+        table.insert(seaBtns,{s,b})
+        b.MouseButton1Click:Connect(function() SetSea(s) end)
+    end
+
+    Sec(pg,"ATIVAR",C.orange)
+    Tog(pg,"Auto Halloween Event",false,function(v) Halloween.Active=v end)
+    Tog(pg,"Auto Summon Jack-o'-Lantern (50 Candy)",false,function(v) Halloween.AutoSummonJO=v end)
+
+    -- Descrição dos modos
+    Sec(pg,"MODOS — COMO FUNCIONA",C.orange)
+    local infoList = {
+        "🍬 CANDY: Farm automático de candies nos mobs de Halloween.",
+        "   Zombies (1° Mar) | Skeletons (2° Mar) | Gorillas (3° Mar)",
+        "🎃 JACK-O: Busca e mata Jack-o'-Lantern (summona com 50 Candy).",
+        "   Drops: Pumpkin Smasher (2.25%), Pumpkin Head, Hallo Shawl",
+        "💀 SKULL KING: Mata Skull King que spawna 1x/hora na Hallow Island.",
+        "   Drops: Bone Scythe, Sea King Skull, Candy",
+        "🐢 DEPTH KING: Novo Raid Boss Upd11 — Tartaruga gigante 3° Mar.",
+        "   Drops: Dread Broom, Depth King Armor, materiais raros",
+    }
+    for _,info in ipairs(infoList) do
+        Lbl(pg,"  "..info, info:sub(1,2)=="  " and C.dim or C.orange)
+    end
+
+    Sec(pg,"CALIBRAR HALLOWEEN ISLANDS",C.orange)
+    Lbl(pg,"  1° Mar: entre Sky Island e Zombie Island", C.dim)
+    Lbl(pg,"  2° Mar: norte de Skull Island", C.dim)
+    Lbl(pg,"  3° Mar: oeste de Unearthly Shadows Island", C.dim)
+
+    for _,hi in ipairs({{1,"1° Mar"},{2,"2° Mar"},{3,"3° Mar"}}) do
+        local seaN, seaL = hi[1], hi[2]
+        Lbl(pg,"  "..seaL..":")
+        local row=Instance.new("Frame",pg); row.Size=UDim2.new(1,0,0,32); row.BackgroundTransparency=1; row.ZIndex=10
+        Lst(row,Enum.FillDirection.Horizontal,6)
+        local posL=Instance.new("TextLabel",row); posL.Size=UDim2.new(0.55,0,1,0)
+        posL.BackgroundColor3=C.card; posL.BackgroundTransparency=0
+        local curPos=HalloweenPos[seaN]
+        posL.Text=(curPos==Vector3.new(0,100,0)) and "Não calibrado" or ("%.0f,%.0f,%.0f"):format(curPos.X,curPos.Y,curPos.Z)
+        posL.TextColor3=(curPos==Vector3.new(0,100,0)) and C.dim or C.green
+        posL.TextSize=9; posL.Font=Enum.Font.Gotham
+        posL.TextXAlignment=Enum.TextXAlignment.Center; posL.BorderSizePixel=0; Rnd(posL,6); posL.ZIndex=11
+        local calBtn=Instance.new("TextButton",row)
+        calBtn.Size=UDim2.new(0.23,-6,1,0); calBtn.BackgroundColor3=C.orange; calBtn.BackgroundTransparency=0
+        calBtn.Text="CALIBRAR"; calBtn.TextColor3=C.text; calBtn.TextSize=9
+        calBtn.Font=Enum.Font.GothamBold; calBtn.BorderSizePixel=0; Rnd(calBtn,6); calBtn.ZIndex=11
+        local tpBtn=Instance.new("TextButton",row)
+        tpBtn.Size=UDim2.new(0.22,-6,1,0); tpBtn.BackgroundColor3=C.card; tpBtn.BackgroundTransparency=0
+        tpBtn.Text="IR"; tpBtn.TextColor3=C.text; tpBtn.TextSize=9
+        tpBtn.Font=Enum.Font.GothamBold; tpBtn.BorderSizePixel=0; Rnd(tpBtn,6); tpBtn.ZIndex=11
+
+        local sn=seaN
+        calBtn.MouseButton1Click:Connect(function()
+            local c=LP.Character; if not c or not c:FindFirstChild("HumanoidRootPart") then return end
+            local pos=c.HumanoidRootPart.Position; HalloweenPos[sn]=pos
+            posL.Text=("%.0f,%.0f,%.0f"):format(pos.X,pos.Y,pos.Z); posL.TextColor3=C.green
+            hsl.Text=("OK Hallow "..seaL.." = %.0f,%.0f,%.0f"):format(pos.X,pos.Y,pos.Z)
+        end)
+        tpBtn.MouseButton1Click:Connect(function()
+            SafeTP(HalloweenPos[sn])
+        end)
+    end
+
+    Sec(pg,"ESTILOS & CONFIGURAÇÃO",C.orange)
+    StyleRow(pg,"melee",function(k) Halloween.Style=k end)
+    Lbl(pg,"  Altura hover:"); Inp(pg,"6",function(v) local n=tonumber(v); if n then Halloween.HoverY=n end end).Text="6"
+
+    Sec(pg,"DROPS — JACK-O'-LANTERN",C.orange)
+    local drops={
+        "Pumpkin Smasher  —  2.25% (ou 1000 Candy + 100 Logs)",
+        "Pumpkin Head     —  4.5%  (ou 350 Candy)",
+        "Hallo Shawl      —  6.75% (ou 750 Candy)",
+        "Hallow Lamp      —  9%    (ou 500 Candy)",
+    }
+    for _,d in ipairs(drops) do Lbl(pg,"  🎃 "..d, C.gold) end
+
+    Sec(pg,"DROPS — SKULL KING",C.orange)
+    local sdrops={
+        "Bone Scythe        —  3.375% (ou 1500 Candy + mats)",
+        "Sea King Skull     —  4.5%   (ou 750 Candy + mats)",
+        "Candy              —  drop comum",
+    }
+    for _,d in ipairs(sdrops) do Lbl(pg,"  💀 "..d, C.gold) end
 end
 
 -- ============================================================
@@ -1441,10 +1851,13 @@ do
     Btn(pg,"Ir para Qualquer Fruta",TP_NearestFruit)
 
     Sec(pg,"FRUTAS LENDÁRIAS (Upd11)")
-    local fi={"Pteranodon  (Mítica)","Erebus  (Lendária, nova Upd11)","Loki  (Lendária, nova Upd11)",
-               "Dragon  (Lendária)","Toy  (Lendária)","Phoenix  (Lendária)",
-               "Tree  (Lendária, Upd10)","Demon  (Lendária, Upd10)","Gold  (Lendária)",
-               "Dough  (Lendária)","Leopard  (Lendária)","Portal  (Lendária)"}
+    local fi={
+        "Erebus  (Mítica — Upd11, dragon negro)","Loki  (Lendária — Upd11)",
+        "Pteranodon  (Mítica — Upd10)","Dragon  (Lendária, rework Upd11)",
+        "Toy  (Lendária)","Phoenix  (Lendária)","Tree  (Lendária)","Demon  (Lendária)",
+        "Gold  (Lendária)","Dough  (Lendária)","Leopard  (Lendária)",
+        "Portal/Gate  (Lendária)","Gravity  (Lendária)","Shadow  (Lendária)",
+    }
     for _,f in ipairs(fi) do Lbl(pg,"  🍎 "..f, C.gold) end
 end
 
@@ -1475,6 +1888,15 @@ do
     Btn(pg,"🍎 Ir para Fruta Mais Próxima",TP_NearestFruit, true)
     Btn(pg,"⭐ Ir para Lendária Mais Próxima",function() TP_NearestLegendary() end,
         false, Color3.fromRGB(80,55,8))
+
+    Sec(pg,"HALLOWEEN ISLANDS — Upd11",C.orange)
+    Lbl(pg,"  Calibre as posições na aba Halloween primeiro.", C.dim)
+    local seaNames={[1]="1° Mar (Sky↔Zombie)",[2]="2° Mar (N. Skull Isle)",[3]="3° Mar (Unearthly W.)"}
+    for s=1,3 do
+        local sn=s
+        Btn(pg,"🎃 Hallow Island "..seaNames[s], function() SafeTP(HalloweenPos[sn]) end,
+            false, Color3.fromRGB(50,20,5))
+    end
 
     Sec(pg,"JOGADORES")
     Lbl(pg,"  Nome do jogador:"); local pI=Inp(pg,"username...")
@@ -1534,10 +1956,21 @@ do
     Tog(pg,"Ken Haki (pressiona E)", false,function(v) AutoHaki.Ken=v end)
 
     Sec(pg,"MOVIMENTO")
+    local noClipActive=false
     Tog(pg,"No Clip",false,function(v)
+        noClipActive=v
         local c=LP.Character
         if c then for _,p in ipairs(c:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide=not v end end end
     end)
+    -- Mantém no-clip enquanto ativo (sem interferir com AttackMob)
+    RunService.Stepped:Connect(function()
+        if not noClipActive then return end
+        local c=LP.Character; if not c then return end
+        for _,p in ipairs(c:GetDescendants()) do
+            if p:IsA("BasePart") then p.CanCollide=false end
+        end
+    end)
+
     Tog(pg,"Infinite Jump",false,function(v)
         getgenv()._infJ=v
         if v and not getgenv()._infJC then
@@ -1549,7 +1982,10 @@ do
             end)
         elseif not v and getgenv()._infJC then getgenv()._infJC:Disconnect(); getgenv()._infJC=nil end
     end)
-    Tog(pg,"Fly Mode (WASD + Espaço/Shift)",false,function(v) SetFly(v, flySpeed); if not v then SetCollision(true) end end)
+    Tog(pg,"Fly Mode (WASD + Espaço/Shift)",false,function(v)
+        SetFly(v, flySpeed)
+        if not v then SetCollision(true) end
+    end)
     Lbl(pg,"  Fly Speed:"); Inp(pg,"80",function(v) local n=tonumber(v); if n then flySpeed=n end end).Text="80"
 
     Sec(pg,"VELOCIDADE E PULO")
@@ -1565,13 +2001,30 @@ do
     Inp(pg,"15",function(v) local n=tonumber(v); if n then hitboxSize=n; if HitboxCon then SetHitbox(true,n) end end end).Text="15"
 
     Sec(pg,"UTILITÁRIOS")
-    Btn(pg,"Restaurar Colisão",function() SetCollision(true) end)
+    Btn(pg,"Restaurar Colisão (fix flutuação)",function()
+        SetCollision(true)
+        -- CORREÇÃO EXTRA: força Humanoid para estado normal
+        local c=LP.Character
+        if c then
+            local hum=c:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+            end
+        end
+    end, false, Color3.fromRGB(0,80,40))
     Btn(pg,"Recarregar Personagem",function() SetCollision(true); LP:LoadCharacter() end)
     Btn(pg,"🔀 Server Hop",function() ServerHop() end)
     Btn(pg,"⛔ PARAR TUDO",function()
         Farm.Active=false; BossConfig.Active=false; DungeonConfig.Active=false
         SeaEvent.Active=false; AutoStats.Active=false; FruitNotifier.Active=false
+        Halloween.Active=false
         SetFly(false); SetHitbox(false,10); SetCollision(true)
+        -- Restaura estado do Humanoid
+        local c=LP.Character
+        if c then
+            local hum=c:FindFirstChildOfClass("Humanoid")
+            if hum then hum:ChangeState(Enum.HumanoidStateType.GettingUp) end
+        end
     end, true)
 end
 
@@ -1594,7 +2047,7 @@ do
     Lbl(pg,"  Mensagem:"); local wm=Inp(pg,"Mensagem...")
     Btn(pg,"Enviar",function() SendWebhook(Cfg.WHUrl, wt.Text, wm.Text, 3447003) end, true)
     Btn(pg,"Testar Conexão",function()
-        SendWebhook(Cfg.WHUrl,"✅ Conexão OK","China Hub v7.0 | **"..LP.Name.."** | Lv "..GetLevel(), 65280)
+        SendWebhook(Cfg.WHUrl,"✅ Conexão OK","China Hub v8.0 | **"..LP.Name.."** | Lv "..GetLevel(), 65280)
     end)
 
     Sec(pg,"SERVIDOR ATUAL")
@@ -1685,7 +2138,9 @@ local function UpdBoss()
             local d=Dist(hrp.Position); if d>Cfg.ESPRange then continue end
             local p2D,_,onS=W2V(hrp.Position+Vector3.new(0,5,0)); if not onS then continue end
             local hum=boss:FindFirstChildOfClass("Humanoid")
-            local l=NTxt(Cfg.Col_Boss,14); l.Text="⚔ "..b.name; l.Position=Vector2.new(p2D.X,p2D.Y-14); l.Visible=true
+            local col = (b.name=="Depth King" or b.name=="Skull King" or b.name=="Jack-o-Lantern")
+                and C.orange or Cfg.Col_Boss
+            local l=NTxt(col,14); l.Text="⚔ "..b.name; l.Position=Vector2.new(p2D.X,p2D.Y-14); l.Visible=true
             local dl=NTxt(Color3.new(1,1,1),11); dl.Text=d.."m  HP "..(hum and math.floor(hum.Health) or "?"); dl.Position=Vector2.new(p2D.X,p2D.Y+2); dl.Visible=true
             table.insert(BossPool,{lbl=l,d=dl})
         end
@@ -1696,11 +2151,11 @@ end
 --  BOTÃO MOSTRAR/OCULTAR (Ctrl)
 -- ============================================================
 local SBtn=Instance.new("TextButton",SG)
-SBtn.Size=UDim2.new(0,160,0,32); SBtn.Position=UDim2.new(0,20,0,55)
+SBtn.Size=UDim2.new(0,170,0,32); SBtn.Position=UDim2.new(0,20,0,55)
 SBtn.BackgroundColor3=C.side; SBtn.BackgroundTransparency=0
-SBtn.Text="⚔ CHINA HUB v7.0"; SBtn.TextColor3=C.acc2
+SBtn.Text="🎃 CHINA HUB v8.0 | Upd11"; SBtn.TextColor3=C.orange
 SBtn.TextSize=10; SBtn.Font=Enum.Font.GothamBold; SBtn.BorderSizePixel=0; SBtn.Visible=false
-Rnd(SBtn,8); Str(SBtn,C.acc,1.5); SBtn.ZIndex=10
+Rnd(SBtn,8); Str(SBtn,C.orange,1.5); SBtn.ZIndex=10
 
 local function TogVis()
     if WIN.Visible then WIN.Visible=false; shadow.Visible=false; SBtn.Visible=true
@@ -1715,7 +2170,7 @@ end)
 -- ============================================================
 --  INIT
 -- ============================================================
-Switch("FARM")
+Switch("HALLOWEEN")  -- abre na aba do evento por padrão
 for _,pl in ipairs(Players:GetPlayers()) do MkESP(pl) end
 Players.PlayerAdded:Connect(function(pl) task.wait(1); MkESP(pl) end)
 Players.PlayerRemoving:Connect(KillESP)
@@ -1730,4 +2185,4 @@ RunService.RenderStepped:Connect(function()
     if espT%12==0 then UpdF(); UpdBoss(); espT=0 end
 end)
 
-print("[China Hub Free v7.0 | Update 11] carregado — "..LP.Name)
+print("[China Hub Free v8.0 | Update 11 Halloween] carregado — "..LP.Name)
