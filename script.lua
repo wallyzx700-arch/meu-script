@@ -1,11 +1,11 @@
 -- ============================================================
---  CHINA HUB FREE  v8.0  —  King Legacy Update 11
+--  CHINA HUB FREE  v8.1  —  King Legacy Update 11
 --  Auto Farm | Auto Boss | Auto Dungeon | Auto Raid
 --  Sea Events | Kill Aura | Auto Stats | Auto Haki
 --  Halloween Event | Jack-o'-Lantern | Skull King | Depth King
---  ESP Players/Fruits/Bosses | Fruit Notifier + Discord Webhook
+--  ESP Players/Fruits/Bosses | NTT Join
+--  Sea 3 Auto-Hoop: Depth King | Dragon | Abyssal | Crab | Kraken
 --  Server Hop | Hitbox Expand | Fly Mode
---  BUG FIX: personagem flutuando corrigido
 -- ============================================================
 local Players          = game:GetService("Players")
 local RunService       = game:GetService("RunService")
@@ -127,24 +127,21 @@ local function GetZone(lv)
 end
 
 -- ============================================================
---  HALLOWEEN ISLANDS — Update 11
---  1° Mar: entre Sky Island e Zombie Island
---  2° Mar: norte de Skull Island
---  3° Mar: oeste de Unearthly Shadows Island
+--  HALLOWEEN ISLANDS
 -- ============================================================
 local HalloweenIslands = {
-    { sea=1, label="1° Mar (Sky↔Zombie)",   pos=Vector3.new(-2200,28,-2800), calibrate=true },
-    { sea=2, label="2° Mar (N. Skull Isle)", pos=Vector3.new(0,100,0),        calibrate=true },
-    { sea=3, label="3° Mar (Unearthly W.)",  pos=Vector3.new(0,100,0),        calibrate=true },
+    { sea=1, label="1° Mar (Sky↔Zombie)",    pos=Vector3.new(-2200,28,-2800), calibrate=true },
+    { sea=2, label="2° Mar (N. Skull Isle)",  pos=Vector3.new(0,100,0),        calibrate=true },
+    { sea=3, label="3° Mar (Unearthly W.)",   pos=Vector3.new(0,100,0),        calibrate=true },
 }
 
 -- ============================================================
---  FRUTAS LENDÁRIAS / MÍTICAS — Update 11 completo
+--  FRUTAS LENDÁRIAS / MÍTICAS — Update 11
 -- ============================================================
 local LegendaryList = {
     "Pteranodon",
-    "Erebus","ErebusFruit","Erebus_Fruit",    -- Mítica Update 11 (dragon negro)
-    "Loki","LokiFruit","Loki_Fruit",           -- Lendária Update 11
+    "Erebus","ErebusFruit","Erebus_Fruit",
+    "Loki","LokiFruit","Loki_Fruit",
     "Tree","TreeFruit","Tree_Fruit",
     "Demon","DemonFruit","Demon_Fruit",
     "Dragon","DragonFruit","Dragon_Fruit",
@@ -168,7 +165,7 @@ local LegendaryList = {
     "Human","HumanFruit",
     "Buddha","BuddhaFruit",
     "Love","LoveFruit",
-    "Gate","GateFruit",   -- portal / gate
+    "Gate","GateFruit",
     "Giraffe","GiraffeFruit",
 }
 
@@ -270,17 +267,15 @@ local function FindBoss(namePattern, searchRadius)
 end
 
 -- ============================================================
---  TELEPORTE SEGURO — corrigido para evitar flutuação
+--  TELEPORTE SEGURO
 -- ============================================================
 local seaFails = 0
 local function SafeTP(pos)
     local char = LP.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return false end
-    -- Garante Y mínimo de 60 para não cair no mar
     local safeY = math.max(pos.Y + 5, 60)
     char.HumanoidRootPart.CFrame = CFrame.new(Vector3.new(pos.X, safeY, pos.Z))
     task.wait(1.2)
-    -- Verifica se ainda está no mar; se sim, incrementa falhas
     if char.HumanoidRootPart.Position.Y < SEA_Y then
         seaFails = seaFails + 1; return false
     end
@@ -327,6 +322,19 @@ local function TP_NearestLegendary()
 end
 
 -- ============================================================
+--  NTT JOIN — teleporte por código de servidor privado
+-- ============================================================
+local function JoinNTT(raw)
+    -- aceita link completo ou só o código
+    local code = raw:match("privateServerLinkCode=([^&%s\n\r]+)") or raw:gsub("%s+","")
+    if code == "" then return false, "código vazio" end
+    local ok, err = pcall(function()
+        TS:TeleportToPrivateServer(game.PlaceId, code)
+    end)
+    return ok, err
+end
+
+-- ============================================================
 --  COLISÃO / QUEST / TOOLS
 -- ============================================================
 local collisionOverride = false
@@ -339,21 +347,12 @@ local function SetCollision(v)
     end
 end
 
--- Restaura colisão automaticamente se personagem está parado
 local collisionRestoreTimer = 0
 RunService.Heartbeat:Connect(function(dt)
     if not collisionOverride then return end
     collisionRestoreTimer = collisionRestoreTimer + dt
     if collisionRestoreTimer >= 2.5 then
         collisionRestoreTimer = 0
-        local char = LP.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            -- restaura colisão se humanoid não está morto
-            if hum and hum.Health > 0 then
-                -- mantém NoClip quando override ativo
-            end
-        end
     end
 end)
 
@@ -407,7 +406,8 @@ local function FindQuestPrompt(nearPos, radius)
                 best = obj; bestD = d
             end
             local model = part.Parent
-            if model and model:IsA("Model") and (model.Name:lower():find("quest") or model.Name:lower():find("altar") or model.Name:lower():find("grave")) then
+            if model and model:IsA("Model") and (model.Name:lower():find("quest")
+               or model.Name:lower():find("altar") or model.Name:lower():find("grave")) then
                 best = obj; bestD = d
             end
         end
@@ -448,7 +448,7 @@ local function PressKey(kc)
 end
 
 -- ============================================================
---  ATACAR MOB — corrigido para não deixar personagem flutuando
+--  ATACAR MOB
 -- ============================================================
 local function AttackMob(mob, hoverY, style)
     local char = LP.Character
@@ -456,11 +456,9 @@ local function AttackMob(mob, hoverY, style)
     local hrp = mob:FindFirstChild("HumanoidRootPart"); if not hrp then return end
     hoverY = hoverY or 5
 
-    -- Posiciona acima do mob olhando para ele
     local over = hrp.Position + Vector3.new(0, hoverY, 0)
     char.HumanoidRootPart.CFrame = CFrame.lookAt(over, hrp.Position)
 
-    -- Desativa colisão apenas durante o ataque
     local char2 = LP.Character
     if char2 then
         for _, p in ipairs(char2:GetDescendants()) do
@@ -474,7 +472,6 @@ local function AttackMob(mob, hoverY, style)
         EquipFirst("sword")
     end
 
-    -- Envia clique na tela
     local sp, _, onScr = Camera:WorldToViewportPoint(hrp.Position)
     if onScr then
         local x, y = math.floor(sp.X), math.floor(sp.Y)
@@ -485,8 +482,6 @@ local function AttackMob(mob, hoverY, style)
 
     task.wait(0.05)
 
-    -- CORREÇÃO PRINCIPAL: restaura colisão imediatamente após o ataque
-    -- para evitar que o personagem fique flutuando
     local char3 = LP.Character
     if char3 then
         for _, p in ipairs(char3:GetDescendants()) do
@@ -528,7 +523,6 @@ local function SetFly(v, spd)
     local char = LP.Character; if not char then return end
     if not v then
         if flyBody then flyBody:Destroy(); flyBody = nil end
-        -- CORREÇÃO: restaura colisão e estado do humanoid ao desligar fly
         local char2 = LP.Character
         if char2 then
             for _, p in ipairs(char2:GetDescendants()) do
@@ -568,31 +562,6 @@ end)
 
 local function ServerHop()
     pcall(function() TS:Teleport(game.PlaceId) end)
-end
-
--- ============================================================
---  WEBHOOK
--- ============================================================
-local function SendWebhook(url, title, description, color, fields)
-    if not url or url == "" then return end
-    local req = syn and syn.request or (http and http.request) or request
-    if not req then return end
-    pcall(req, {
-        Url = url, Method = "POST",
-        Headers = {["Content-Type"]="application/json"},
-        Body = HttpService:JSONEncode({
-            username   = "China Hub Free | King Legacy",
-            avatar_url = "https://tr.rbxcdn.com/180DAY-b65da32af1c66f5c74c6f6ab06ff5bfe/420/420/Image/Webp/noFilter",
-            embeds = {{
-                title       = title or "Notificação",
-                description = description or "",
-                color       = color or 10066329,
-                fields      = fields or {},
-                footer      = { text = "China Hub v8.0 | " .. LP.Name .. " | " ..
-                                os.date("!%d/%m/%Y %H:%M:%S") .. " UTC" },
-            }}
-        })
-    })
 end
 
 -- ============================================================
@@ -652,24 +621,23 @@ task.spawn(function()
 end)
 
 -- ============================================================
---  HALLOWEEN EVENT — Upd11
+--  HALLOWEEN EVENT
 -- ============================================================
 local Halloween = {
     Active       = false,
-    Mode         = "candy",   -- "candy" | "jacko" | "skullking" | "depthking"
-    Sea          = 1,         -- 1, 2, 3
+    Mode         = "candy",
+    Sea          = 1,
     StatusText   = "Inativo",
     Style        = "melee",
     HoverY       = 6,
     CandyCount   = 0,
-    AutoSummonJO = false,     -- tenta usar 50 Candy no altar
+    AutoSummonJO = false,
 }
 
--- Posição calibrável das Halloween Islands por mar
 local HalloweenPos = {
-    [1] = Vector3.new(0,100,0),  -- calibrar: entre Sky e Zombie Island
-    [2] = Vector3.new(0,100,0),  -- calibrar: norte de Skull Island
-    [3] = Vector3.new(0,100,0),  -- calibrar: oeste de Unearthly Shadows
+    [1] = Vector3.new(0,100,0),
+    [2] = Vector3.new(0,100,0),
+    [3] = Vector3.new(0,100,0),
 }
 
 local function ScanCandyMob()
@@ -701,16 +669,12 @@ task.spawn(function()
     while true do
         task.wait(0.3)
         if not Halloween.Active then continue end
-
         local char = LP.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") then task.wait(1); continue end
         local hum = char:FindFirstChildOfClass("Humanoid")
         if not hum or hum.Health <= 0 then task.wait(3); continue end
-
         local hPos = HalloweenPos[Halloween.Sea]
-
         if Halloween.Mode == "candy" then
-            -- Farm candies nos mobs de Halloween
             local mob = ScanCandyMob()
             if mob then
                 AttackMob(mob, Halloween.HoverY, Halloween.Style)
@@ -718,14 +682,11 @@ task.spawn(function()
                 Halloween.StatusText = ("🍬 Candy Farm | %s | HP %d"):format(
                     mob.Name, h and math.floor(h.Health) or 0)
             else
-                -- Sem mob, vai para posição da ilha de Halloween
                 SafeTP(hPos)
                 Halloween.StatusText = ("🍬 Candy Farm | 🌊 Mar %d | Aguardando mobs..."):format(Halloween.Sea)
                 task.wait(2)
             end
-
         elseif Halloween.Mode == "jacko" then
-            -- Busca Jack-o'-Lantern boss
             local boss, dist = FindBoss("Jack", 3000)
             if not boss then boss, dist = FindBoss("Lantern", 3000) end
             if not boss then boss, dist = FindBoss("Pumpkin", 3000) end
@@ -735,19 +696,15 @@ task.spawn(function()
                 Halloween.StatusText = ("🎃 Jack-o'-Lantern | HP %d | %.0fm"):format(
                     h and math.floor(h.Health) or 0, dist or 0)
             else
-                -- Vai para Halloween Island e tenta usar altar de summon
                 SafeTP(hPos)
                 Halloween.StatusText = ("🎃 Jack-o'-Lantern | Ilha Hallow Mar%d | Summonando..."):format(Halloween.Sea)
                 if Halloween.AutoSummonJO then
-                    -- Procura altar/gravestone para summon com 50 Candy
                     local pp = FindQuestPrompt(hPos, 80)
                     if pp then FirePP(pp); task.wait(0.5) end
                 end
                 task.wait(3)
             end
-
         elseif Halloween.Mode == "skullking" then
-            -- Skull King (Halloween Island 3° Mar, spawn a cada hora)
             local boss, dist = FindBoss("Skull", 3000)
             if not boss then boss, dist = FindBoss("SkullKing", 3000) end
             if boss then
@@ -760,10 +717,7 @@ task.spawn(function()
                 Halloween.StatusText = "💀 Skull King | Aguardando spawn (1h)..."
                 task.wait(5)
             end
-
         elseif Halloween.Mode == "depthking" then
-            -- Depth King — novo boss Update 11, 3° Mar
-            -- Boss tipo tartaruga gigante, raid boss
             local boss, dist = FindBoss("Depth", 10000)
             if not boss then boss, dist = FindBoss("DepthKing", 10000) end
             if boss then
@@ -795,25 +749,18 @@ task.spawn(function()
     while true do
         task.wait(0.25)
         if not Farm.Active then
-            Farm.State="idle"
-            -- CORREÇÃO: restaura colisão quando farm é desligado
-            SetCollision(true)
-            continue
+            Farm.State="idle"; SetCollision(true); continue
         end
-
         local char = LP.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") then task.wait(1); continue end
         local hum = char:FindFirstChildOfClass("Humanoid")
         if not hum or hum.Health <= 0 then
             SetCollision(true); Farm.StatusText="Respawnando..."; Farm.State="idle"; task.wait(4); continue
         end
-
         local lv = GetLevel(); local zone = GetZone(lv)
-
         if Farm.State == "idle" then
             Farm.Zone=zone; Farm.KillCount=0
             Farm.StatusText=("Lv %d | %s | Viajando"):format(lv,zone.name); Farm.State="tozone"
-
         elseif Farm.State == "tozone" then
             if zone.calibrate then
                 Farm.StatusText="CALIBRAR: "..zone.name.." — aba Farm"; Farm.Active=false; Farm.State="idle"; continue
@@ -837,7 +784,6 @@ task.spawn(function()
             if Farm.Style=="sword" then EquipFirst("sword") end
             Farm.State="fighting"; Farm.KillCount=0
             Farm.StatusText=("Lv %d | %s | Lutando"):format(lv,zone.name)
-
         elseif Farm.State == "fighting" then
             local mob = FindMob(Farm.Zone.mobPos, Farm.Zone.radius)
             if mob and mob:FindFirstChild("HumanoidRootPart") then
@@ -852,7 +798,6 @@ task.spawn(function()
                     lv,zone.name,Farm.KillCount,Farm.TargetKills,curHp)
                 if Farm.KillCount>=Farm.TargetKills then SetCollision(true); Farm.State="idle" end
             else
-                -- CORREÇÃO: se sem mob, volta ao chão em vez de ficar flutuando
                 SafeTP(Farm.Zone.mobPos)
                 Farm.StatusText=("Lv %d | %s | Aguardando spawn..."):format(lv,zone.name)
                 if Farm.KillCount>=Farm.TargetKills then SetCollision(true); Farm.State="idle" end
@@ -873,7 +818,7 @@ task.spawn(function()
 end)
 
 -- ============================================================
---  BOSS CONFIG + LOOP — Update 11 completo
+--  BOSS CONFIG + LOOP
 -- ============================================================
 local BossConfig = {
     Active=false, StatusText="Inativo", Style="melee", HoverY=5,
@@ -882,25 +827,26 @@ local BossConfig = {
 
 local BossList = {
     -- Upd11 Halloween
-    { name="Depth King",    pattern="Depth",    range=10000, notes="Upd11 | Raid 3° Mar | Tartaruga gigante" },
-    { name="Skull King",    pattern="Skull",    range=3000,  notes="Halloween Upd11 | Spawn 1h | Hallow Island 3° Mar" },
-    { name="Jack-o-Lantern",pattern="Jack",     range=3000,  notes="Halloween | 50 Candy p/ summon | 2°/3° Mar" },
-    -- Upd10/11
-    { name="Pteranodon",    pattern="Pterano",  range=8000,  notes="Raid Boss Upd10 | Spawn 2h" },
-    { name="Serpente",      pattern="Serpent",  range=8000,  notes="Raid Boss Upd10 | Spawn 1h30 (pesca)" },
-    -- 3° Mar eventos
-    { name="Drakenfyr",     pattern="Drakenfyr",range=8000,  notes="3° Mar Event Boss" },
-    { name="Chaos Kraken",  pattern="Kraken",   range=8000,  notes="3° Mar Event Boss" },
-    { name="Abyssal Tyrant",pattern="Abyssal",  range=8000,  notes="3° Mar Event | Spawn 2h (randômico)" },
+    { name="Depth King",    pattern="Depth",     range=10000, notes="Upd11 | Raid 3° Mar | Tartaruga gigante" },
+    { name="Skull King",    pattern="Skull",      range=3000,  notes="Halloween Upd11 | Spawn 1h | Hallow Island 3° Mar" },
+    { name="Jack-o-Lantern",pattern="Jack",       range=3000,  notes="Halloween | 50 Candy p/ summon | 2°/3° Mar" },
+    -- Sea 3 Events (Upd11)
+    { name="Drakenfyr",     pattern="Drakenfyr",  range=12000, notes="3° Mar Event Boss | Dragon" },
+    { name="Chaos Kraken",  pattern="Kraken",     range=12000, notes="3° Mar Event Boss" },
+    { name="Abyssal Tyrant",pattern="Abyssal",    range=12000, notes="3° Mar Event | Spawn 2h randômico" },
+    { name="Crab King",     pattern="Crab",       range=12000, notes="3° Mar Sea Event | Caranguejo gigante" },
+    -- Upd10/11 Raid
+    { name="Pteranodon",    pattern="Pterano",    range=8000,  notes="Raid Boss Upd10 | Spawn 2h" },
+    { name="Serpente",      pattern="Serpent",    range=8000,  notes="Raid Boss Upd10 | Spawn 1h30 (pesca)" },
     -- Clássicos
-    { name="Kaido",         pattern="Kaido",    range=5000,  notes="3° Mar" },
-    { name="Big Mom",       pattern="BigMom",   range=5000,  notes="3° Mar" },
-    { name="Sea King",      pattern="SeaKing",  range=8000,  notes="Mar aleatório | Legacy Island" },
-    { name="Hydra",         pattern="Hydra",    range=5000,  notes="Raid | 2.5M HP P1 / 5M HP P2" },
-    { name="Ghost Ship",    pattern="Ghost",    range=8000,  notes="Sea event 2° Mar" },
-    { name="Arlong",        pattern="Arlong",   range=800,   notes="1° Mar" },
-    { name="Don Krieg",     pattern="Krieg",    range=800,   notes="1° Mar" },
-    { name="Ax-Hand Morgan",pattern="Morgan",   range=800,   notes="1° Mar" },
+    { name="Kaido",         pattern="Kaido",      range=5000,  notes="3° Mar" },
+    { name="Big Mom",       pattern="BigMom",     range=5000,  notes="3° Mar" },
+    { name="Sea King",      pattern="SeaKing",    range=8000,  notes="Mar aleatório | Legacy Island" },
+    { name="Hydra",         pattern="Hydra",      range=5000,  notes="Raid | 2.5M HP P1 / 5M HP P2" },
+    { name="Ghost Ship",    pattern="Ghost",      range=8000,  notes="Sea event 2° Mar" },
+    { name="Arlong",        pattern="Arlong",     range=800,   notes="1° Mar" },
+    { name="Don Krieg",     pattern="Krieg",      range=800,   notes="1° Mar" },
+    { name="Ax-Hand Morgan",pattern="Morgan",     range=800,   notes="1° Mar" },
 }
 
 task.spawn(function()
@@ -955,8 +901,10 @@ end)
 -- ============================================================
 --  SEA EVENT CONFIG + LOOP
 -- ============================================================
-local SeaEvent = { Active=false, SeaBeast=true, GhostShip=false, Pteranodon=false, Serpent=false,
-                   StatusText="Inativo", Style="melee", HoverY=8 }
+local SeaEvent = {
+    Active=false, SeaBeast=true, GhostShip=false, Pteranodon=false, Serpent=false,
+    StatusText="Inativo", Style="melee", HoverY=8
+}
 
 task.spawn(function()
     while true do
@@ -970,9 +918,7 @@ task.spawn(function()
         end
         if not target and SeaEvent.GhostShip then local gs,_=FindBoss("Ghost",8000); if gs then target=gs end end
         if not target and SeaEvent.Pteranodon then local pt,_=FindBoss("Pterano",8000); if pt then target=pt end end
-        if not target and SeaEvent.Serpent then
-            local sn,_=FindBoss("Serpent",8000); if sn then target=sn end
-        end
+        if not target and SeaEvent.Serpent then local sn,_=FindBoss("Serpent",8000); if sn then target=sn end end
         if target then
             local h=target:FindFirstChildOfClass("Humanoid")
             AttackMob(target, SeaEvent.HoverY, SeaEvent.Style)
@@ -982,17 +928,94 @@ task.spawn(function()
 end)
 
 -- ============================================================
+--  SEA HOOP — Auto Server Hop para eventos do 3° Mar
+--  Depth King | Drakenfyr | Abyssal Tyrant | Crab King | Chaos Kraken
+-- ============================================================
+local AutoHoop = {
+    Active       = false,
+    StatusText   = "Inativo",
+    TargetBoss   = "Depth King",
+    ScanTime     = 10,      -- segundos de scan antes de hopar
+    FightOnFind  = true,    -- faz farm ao encontrar
+    Style        = "melee",
+    HoverY       = 8,
+    _scanTimer   = 0,
+    _found       = false,
+}
+
+-- bosses alvo do 3° Mar para o hoop
+local HoopTargets = {
+    { name="Depth King",    pattern="Depth",    range=15000, notes="Tartaruga gigante Upd11" },
+    { name="Drakenfyr",     pattern="Drakenfyr",range=15000, notes="Dragon 3° Mar" },
+    { name="Abyssal Tyrant",pattern="Abyssal",  range=15000, notes="Spawn 2h randômico" },
+    { name="Crab King",     pattern="Crab",     range=15000, notes="Caranguejo gigante" },
+    { name="Chaos Kraken",  pattern="Kraken",   range=15000, notes="Kraken 3° Mar" },
+}
+
+task.spawn(function()
+    while true do
+        task.wait(0.4)
+        if not AutoHoop.Active then
+            AutoHoop._scanTimer = 0; AutoHoop._found = false; continue
+        end
+
+        local char = LP.Character
+        if not char or not char:FindFirstChild("HumanoidRootPart") then task.wait(1); continue end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then task.wait(3); continue end
+
+        -- encontra entrada do alvo
+        local entry = nil
+        for _, t in ipairs(HoopTargets) do
+            if t.name == AutoHoop.TargetBoss then entry = t; break end
+        end
+        if not entry then task.wait(1); continue end
+
+        local boss, dist = FindBoss(entry.pattern, entry.range)
+
+        if boss then
+            AutoHoop._scanTimer = 0; AutoHoop._found = true
+            if AutoHoop.FightOnFind then
+                local hrp = boss:FindFirstChild("HumanoidRootPart")
+                if hrp and hrp.Position.Y > SEA_Y then
+                    AttackMob(boss, AutoHoop.HoverY, AutoHoop.Style)
+                    local h = boss:FindFirstChildOfClass("Humanoid")
+                    AutoHoop.StatusText = ("✅ %s | HP %d | %.0fm"):format(
+                        entry.name, h and math.floor(h.Health) or 0, dist or 0)
+                end
+            else
+                AutoHoop.StatusText = ("✅ %s encontrado | %.0fm — farm desligado"):format(
+                    entry.name, dist or 0)
+            end
+        else
+            AutoHoop._found = false
+            AutoHoop._scanTimer = AutoHoop._scanTimer + 0.4
+            AutoHoop.StatusText = ("🔍 Procurando %s... %.0fs / %ds"):format(
+                entry.name, AutoHoop._scanTimer, AutoHoop.ScanTime)
+
+            if AutoHoop._scanTimer >= AutoHoop.ScanTime then
+                -- double-check antes de hopar
+                boss, dist = FindBoss(entry.pattern, entry.range)
+                if boss then
+                    AutoHoop._scanTimer = 0; continue
+                end
+                AutoHoop.StatusText = "🔀 Server Hop — sem " .. entry.name
+                AutoHoop._scanTimer = 0
+                task.wait(0.5)
+                ServerHop()
+                task.wait(6)   -- aguarda carregamento do novo servidor
+            end
+        end
+    end
+end)
+
+-- ============================================================
 --  FRUIT NOTIFIER
 -- ============================================================
 local FruitNotifier = {
-    Active=false, WebhookUrl="", ServerHopOnFind=false, NotifyAll=false,
+    Active=false, ServerHopOnFind=false, NotifyAll=false,
     LastNotified={}, StatusText="Inativo", ScanInterval=3, AutoCollect=false,
 }
-
-local function GetServerLink()
-    return ("https://www.roblox.com/games/%s/King-Legacy?privateServerLinkCode=%s"):format(
-        tostring(game.PlaceId), tostring(game.JobId))
-end
 
 task.spawn(function()
     while true do
@@ -1006,18 +1029,6 @@ task.spawn(function()
                 task.delay(60, function() FruitNotifier.LastNotified[key]=nil end)
                 local rarity=f.rarity or (f.legendary and "Legendary" or "Common")
                 FruitNotifier.StatusText="🍎 "..f.name.." ("..rarity..")"
-                if FruitNotifier.WebhookUrl~="" then
-                    SendWebhook(FruitNotifier.WebhookUrl,
-                        "🍎 "..(f.legendary and "FRUTA LENDÁRIA/MÍTICA!" or "Fruta encontrada!"),
-                        "**"..f.name.."** detectada no mapa!", f.legendary and 16711680 or 65280,
-                        {
-                            {name="Raridade",    value=rarity,                                        inline=true },
-                            {name="Servidor",    value="`"..tostring(game.JobId).."`",                inline=false},
-                            {name="Posição",     value=("X:%.0f Y:%.0f Z:%.0f"):format(f.pos.X,f.pos.Y,f.pos.Z), inline=false},
-                            {name="Link Roblox", value=GetServerLink(),                               inline=false},
-                            {name="Jogador",     value=LP.Name,                                       inline=true },
-                        })
-                end
                 if FruitNotifier.AutoCollect then
                     TP(f.pos); task.wait(0.5)
                     local pp=FindQuestPrompt(f.pos,20); if pp then FirePP(pp) end
@@ -1050,7 +1061,6 @@ local Cfg = {
     HideKey=Enum.KeyCode.LeftControl,
     Col_P=Color3.fromRGB(220,60,60), Col_F_Common=Color3.fromRGB(180,180,180),
     Col_F_Leg=Color3.fromRGB(255,215,0), Col_Boss=Color3.fromRGB(255,80,20),
-    WHUrl="",
 }
 
 local function NTxt(col,sz) local t=Drawing.new("Text"); t.Color=col; t.Size=sz or 13; t.Center=true; t.Outline=true; t.Visible=false; return t end
@@ -1060,16 +1070,16 @@ local function W2V(pos) local sp=Camera:WorldToViewportPoint(pos); return Vector
 local function Dist(pos) local c=LP.Character; if c and c:FindFirstChild("HumanoidRootPart") then return math.floor((c.HumanoidRootPart.Position-pos).Magnitude) end; return 0 end
 
 -- ============================================================
---  GUI — ScreenGui principal
+--  GUI
 -- ============================================================
-local old = CoreGui:FindFirstChild("CHINAHUB8"); if old then old:Destroy() end
+local old = CoreGui:FindFirstChild("CHINAHUB81"); if old then old:Destroy() end
 local SG = Instance.new("ScreenGui")
-SG.Name="CHINAHUB8"; SG.ResetOnSpawn=false
+SG.Name="CHINAHUB81"; SG.ResetOnSpawn=false
 SG.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
 SG.IgnoreGuiInset=true; SG.Parent=CoreGui
 
 -- ============================================================
---  PALETA DE CORES (Halloween Dark — Upd11)
+--  PALETA
 -- ============================================================
 local C = {
     bg    = Color3.fromRGB(6,8,18),
@@ -1082,8 +1092,9 @@ local C = {
     green = Color3.fromRGB(55,220,110),
     red   = Color3.fromRGB(220,55,70),
     gold  = Color3.fromRGB(255,210,50),
-    orange= Color3.fromRGB(255,120,30),  -- Halloween accent
-    purple= Color3.fromRGB(160,60,220),  -- Halloween accent
+    orange= Color3.fromRGB(255,120,30),
+    purple= Color3.fromRGB(160,60,220),
+    teal  = Color3.fromRGB(40,210,180),
     text  = Color3.fromRGB(220,228,248),
     dim   = Color3.fromRGB(100,110,145),
     bord  = Color3.fromRGB(30,45,90),
@@ -1092,7 +1103,7 @@ local C = {
 }
 
 -- ============================================================
---  HELPERS DE LAYOUT
+--  HELPERS
 -- ============================================================
 local function Rnd(p,r)  local c=Instance.new("UICorner",p); c.CornerRadius=UDim.new(0,r or 8) end
 local function Str(p,col,t) local s=Instance.new("UIStroke",p); s.Color=col or C.bord; s.Thickness=t or 1; return s end
@@ -1155,7 +1166,7 @@ TLbl.TextXAlignment=Enum.TextXAlignment.Left; TLbl.ZIndex=7
 local SLbl = Instance.new("TextLabel",Top)
 SLbl.Size=UDim2.new(1,-130,0,14); SLbl.Position=UDim2.new(0,24,0,33)
 SLbl.BackgroundTransparency=1
-SLbl.Text="King Legacy  v8.0  |  Update 11  |  🎃 Halloween Event  |  Depth King"
+SLbl.Text="King Legacy  v8.1  |  Update 11  |  🎃 Halloween  |  🌊 Sea3 Hoop"
 SLbl.TextColor3=C.acc2; SLbl.TextSize=10; SLbl.Font=Enum.Font.Gotham
 SLbl.TextXAlignment=Enum.TextXAlignment.Left; SLbl.ZIndex=7
 
@@ -1192,7 +1203,7 @@ end)
 CBtn.MouseButton1Click:Connect(function()
     Farm.Active=false; BossConfig.Active=false; DungeonConfig.Active=false
     SeaEvent.Active=false; AutoStats.Active=false; FruitNotifier.Active=false
-    Halloween.Active=false
+    Halloween.Active=false; AutoHoop.Active=false
     SetCollision(true); SetFly(false); SetHitbox(false,10)
     SG:Destroy(); shadow:Destroy()
 end)
@@ -1209,7 +1220,7 @@ MBtn.MouseButton1Click:Connect(function()
 end)
 
 -- ============================================================
---  LAYOUT INTERIOR
+--  LAYOUT
 -- ============================================================
 local Layout = Instance.new("Frame",WIN)
 Layout.Position=UDim2.new(0,0,0,52); Layout.Size=UDim2.new(1,0,1,-52)
@@ -1284,41 +1295,63 @@ local function Switch(id)
     CS.CanvasPosition=Vector2.new(0,0)
 end
 
+-- TABS: WEBHOOK substituído por NTT; SEA HOOP nova aba
 local Tabs={
     "FARM","BOSS","DUNGEON","SEA EVENT",
-    "HALLOWEEN",   -- NOVA ABA UPD11
-    "FRUTAS","ESP","TELEPORT","MISC","WEBHOOK"
+    "SEA HOOP",
+    "HALLOWEEN",
+    "FRUTAS","ESP","TELEPORT","MISC","NTT JOIN"
 }
 local TabIcons={
     "⚔","👑","🏯","🌊",
+    "🔀",
     "🎃",
-    "🍎","👁","🗺","⚙","📡"
+    "🍎","👁","🗺","⚙","🔗"
 }
 for i,name in ipairs(Tabs) do
     MkPage(name)
     local btn=Instance.new("TextButton",SB)
-    btn.Name=name; btn.Size=UDim2.new(1,0,0,36)
+    btn.Name=name; btn.Size=UDim2.new(1,0,0,32)
     btn.BackgroundTransparency=1; btn.Text=""; btn.LayoutOrder=i+2; btn.ZIndex=9
-    -- Halloween tab recebe destaque laranja
+
     if name=="HALLOWEEN" then
         local hl=Instance.new("Frame",btn)
         hl.Size=UDim2.new(1,0,1,0); hl.BackgroundColor3=Color3.fromRGB(80,30,0)
         hl.BackgroundTransparency=0.6; hl.BorderSizePixel=0; hl.ZIndex=8; Rnd(hl,0)
     end
+    if name=="SEA HOOP" then
+        local hl=Instance.new("Frame",btn)
+        hl.Size=UDim2.new(1,0,1,0); hl.BackgroundColor3=Color3.fromRGB(0,40,80)
+        hl.BackgroundTransparency=0.6; hl.BorderSizePixel=0; hl.ZIndex=8; Rnd(hl,0)
+    end
+    if name=="NTT JOIN" then
+        local hl=Instance.new("Frame",btn)
+        hl.Size=UDim2.new(1,0,1,0); hl.BackgroundColor3=Color3.fromRGB(10,50,30)
+        hl.BackgroundTransparency=0.6; hl.BorderSizePixel=0; hl.ZIndex=8; Rnd(hl,0)
+    end
+
+    local adColor = C.acc
+    if name=="HALLOWEEN" then adColor=C.orange
+    elseif name=="SEA HOOP" then adColor=C.teal
+    elseif name=="NTT JOIN" then adColor=C.green
+    end
+
     local ad=Instance.new("Frame",btn); ad.Name="AD"
     ad.Size=UDim2.new(0,3,0.5,0); ad.Position=UDim2.new(0,0,0.25,0)
-    ad.BackgroundColor3= name=="HALLOWEEN" and C.orange or C.acc
-    ad.BorderSizePixel=0; ad.Visible=false; Rnd(ad,2); ad.ZIndex=10
+    ad.BackgroundColor3=adColor; ad.BorderSizePixel=0; ad.Visible=false; Rnd(ad,2); ad.ZIndex=10
+
     local ico=Instance.new("TextLabel",btn)
     ico.Size=UDim2.new(0,20,1,0); ico.Position=UDim2.new(0,12,0,0)
-    ico.BackgroundTransparency=1; ico.Text=TabIcons[i]; ico.TextSize=14
+    ico.BackgroundTransparency=1; ico.Text=TabIcons[i]; ico.TextSize=13
     ico.Font=Enum.Font.Gotham; ico.ZIndex=10
+
     local lbl=Instance.new("TextLabel",btn)
     lbl.Size=UDim2.new(1,-38,1,0); lbl.Position=UDim2.new(0,34,0,0)
     lbl.BackgroundTransparency=1; lbl.Text=name; lbl.TextColor3=C.dim
-    lbl.TextSize=10; lbl.Font=Enum.Font.GothamBold
+    lbl.TextSize=9; lbl.Font=Enum.Font.GothamBold
     lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.ZIndex=10
     TabBtns[name]=btn
+
     btn.MouseButton1Click:Connect(function() Switch(name) end)
     btn.MouseEnter:Connect(function()
         if Pages[name] and not Pages[name].Visible then
@@ -1527,14 +1560,13 @@ do
         sd.BackgroundColor3=BossConfig.Active and C.green or C.red
     end end)
 
-    -- Destaque Depth King (Upd11)
     local depthFrame=Instance.new("Frame",pg)
     depthFrame.Size=UDim2.new(1,0,0,42); depthFrame.BackgroundColor3=Color3.fromRGB(8,18,30)
     depthFrame.BackgroundTransparency=0; depthFrame.BorderSizePixel=0; Rnd(depthFrame,8)
     Str(depthFrame,Color3.fromRGB(0,100,180),1.5); depthFrame.ZIndex=10
     local depthLbl=Instance.new("TextLabel",depthFrame)
     depthLbl.Size=UDim2.new(1,0,1,0); depthLbl.BackgroundTransparency=1
-    depthLbl.Text="🐢 DEPTH KING — Novo Boss Upd11 | Raid 3° Mar | Tartaruga Gigante"
+    depthLbl.Text="🌊 Sea 3 Events: Depth King | Drakenfyr | Abyssal | Crab King | Kraken"
     depthLbl.TextColor3=Color3.fromRGB(80,180,255); depthLbl.TextSize=10; depthLbl.Font=Enum.Font.GothamBold
     depthLbl.TextXAlignment=Enum.TextXAlignment.Center; depthLbl.ZIndex=11
 
@@ -1546,13 +1578,16 @@ do
         local row=Instance.new("Frame",pg); row.Size=UDim2.new(1,0,0,38)
         row.BackgroundColor3=C.card; row.BackgroundTransparency=0
         row.BorderSizePixel=0; Rnd(row,7); row.ZIndex=10
-        -- Destaque para bosses do Upd11 Halloween
+
         local isHalloween = (b.name=="Depth King" or b.name=="Skull King" or b.name=="Jack-o-Lantern")
-        if isHalloween then Str(row,C.orange,1.5) end
+        local isSea3 = (b.name=="Drakenfyr" or b.name=="Chaos Kraken" or b.name=="Abyssal Tyrant" or b.name=="Crab King")
+        if isHalloween then Str(row,C.orange,1.5)
+        elseif isSea3 then Str(row,C.teal,1.5) end
+
         local lbl=Instance.new("TextLabel",row)
         lbl.Size=UDim2.new(1,-50,1,0); lbl.Position=UDim2.new(0,12,0,0); lbl.BackgroundTransparency=1
         lbl.Text=b.name.."  —  "..b.notes
-        lbl.TextColor3= isHalloween and C.orange or C.text
+        lbl.TextColor3= isHalloween and C.orange or (isSea3 and C.teal or C.text)
         lbl.TextSize=10; lbl.Font=Enum.Font.Gotham; lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.ZIndex=11
         local sel=Instance.new("TextButton",row)
         sel.Size=UDim2.new(0,42,0,24); sel.Position=UDim2.new(1,-50,0.5,-12)
@@ -1644,12 +1679,109 @@ do
 end
 
 -- ============================================================
---  HALLOWEEN PAGE — NOVA ABA UPD11
+--  SEA HOOP PAGE — Auto Server Hop para eventos do 3° Mar
+-- ============================================================
+do
+    local pg=Pages["SEA HOOP"]
+
+    -- status bar com cor teal
+    local sd,sl=StatusBar(pg)
+    sl.TextColor3=C.teal
+    task.spawn(function() while SG.Parent do task.wait(0.5)
+        sl.Text=AutoHoop.Active and AutoHoop.StatusText or "Inativo"
+        sd.BackgroundColor3=AutoHoop.Active and C.teal or C.red
+    end end)
+
+    -- banner
+    local hBanner=Instance.new("Frame",pg)
+    hBanner.Size=UDim2.new(1,0,0,52); hBanner.BackgroundColor3=Color3.fromRGB(5,18,30)
+    hBanner.BackgroundTransparency=0; hBanner.BorderSizePixel=0; Rnd(hBanner,8)
+    Str(hBanner,C.teal,1.5); hBanner.ZIndex=10
+    local hBL=Instance.new("TextLabel",hBanner)
+    hBL.Size=UDim2.new(1,0,0.5,0); hBL.Position=UDim2.new(0,0,0,4)
+    hBL.BackgroundTransparency=1
+    hBL.Text="🔀  SEA 3 AUTO-HOOP — Update 11"
+    hBL.TextColor3=C.teal; hBL.TextSize=13; hBL.Font=Enum.Font.GothamBold
+    hBL.TextXAlignment=Enum.TextXAlignment.Center; hBL.ZIndex=11
+    local hBS=Instance.new("TextLabel",hBanner)
+    hBS.Size=UDim2.new(1,0,0.5,0); hBS.Position=UDim2.new(0,0,0.5,0)
+    hBS.BackgroundTransparency=1
+    hBS.Text="Depth King | Drakenfyr | Abyssal Tyrant | Crab King | Chaos Kraken"
+    hBS.TextColor3=C.acc2; hBS.TextSize=9; hBS.Font=Enum.Font.Gotham
+    hBS.TextXAlignment=Enum.TextXAlignment.Center; hBS.ZIndex=11
+
+    Sec(pg,"🎯  BOSS ALVO",C.teal)
+
+    -- seletor de boss
+    for _,t in ipairs(HoopTargets) do
+        local row=Instance.new("Frame",pg); row.Size=UDim2.new(1,0,0,40)
+        row.BackgroundColor3=C.card; row.BackgroundTransparency=0
+        row.BorderSizePixel=0; Rnd(row,7); Str(row,C.teal,1); row.ZIndex=10
+
+        local lbl=Instance.new("TextLabel",row)
+        lbl.Size=UDim2.new(1,-54,1,0); lbl.Position=UDim2.new(0,12,0,0); lbl.BackgroundTransparency=1
+        lbl.Text=t.name.."  —  "..t.notes
+        lbl.TextColor3=AutoHoop.TargetBoss==t.name and C.teal or C.text
+        lbl.TextSize=10; lbl.Font=Enum.Font.Gotham; lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.ZIndex=11
+
+        local sel=Instance.new("TextButton",row)
+        sel.Size=UDim2.new(0,44,0,26); sel.Position=UDim2.new(1,-52,0.5,-13)
+        sel.Text="SEL"; sel.TextColor3=C.text; sel.TextSize=10; sel.Font=Enum.Font.GothamBold
+        sel.BackgroundColor3=AutoHoop.TargetBoss==t.name and C.teal or C.card
+        sel.BorderSizePixel=0; Rnd(sel,5); sel.ZIndex=12
+
+        local tn=t.name
+        sel.MouseButton1Click:Connect(function()
+            AutoHoop.TargetBoss=tn
+            -- atualiza visuais de todos os botões e labels desta seção
+            for _,r in ipairs(pg:GetDescendants()) do
+                if r:IsA("TextButton") and r.Text=="SEL" then
+                    TweenService:Create(r,TweenInfo.new(0.12),{BackgroundColor3=C.card}):Play()
+                end
+                if r:IsA("TextLabel") and r.Parent and r.Parent:IsA("Frame") and r.Parent.Parent==pg then
+                    r.TextColor3 = C.text
+                end
+            end
+            TweenService:Create(sel,TweenInfo.new(0.12),{BackgroundColor3=C.teal}):Play()
+            lbl.TextColor3=C.teal
+            sl.Text="Alvo: "..tn
+        end)
+    end
+
+    Sec(pg,"ATIVAR",C.teal)
+    Tog(pg,"Auto Sea Hoop",false,function(v)
+        AutoHoop.Active=v
+        if not v then AutoHoop._scanTimer=0; AutoHoop._found=false end
+    end)
+    Tog(pg,"Farmar boss ao encontrar",true,function(v) AutoHoop.FightOnFind=v end)
+
+    Sec(pg,"CONFIGURAÇÃO",C.teal)
+    Lbl(pg,"  Tempo de scan antes de hopar (seg):")
+    Inp(pg,"10",function(v) local n=tonumber(v); if n and n>=2 then AutoHoop.ScanTime=n end end).Text="10"
+    StyleRow(pg,"melee",function(k) AutoHoop.Style=k end)
+    Lbl(pg,"  Altura hover:")
+    Inp(pg,"8",function(v) local n=tonumber(v); if n then AutoHoop.HoverY=n end end).Text="8"
+
+    Sec(pg,"COMO FUNCIONA",C.teal)
+    local infos={
+        "1. Escaneia o servidor atual pelo boss alvo.",
+        "2. Se não achar em X segundos → Server Hop.",
+        "3. Aguarda 6s após o hop para o mapa carregar.",
+        "4. Ao encontrar o boss, faz farm automaticamente.",
+        "5. Boss morto → continua farm ou hopa de novo.",
+        "⚠ Use 'Farmar boss ao encontrar' desligado para",
+        "   apenas localizar o servidor sem atacar.",
+    }
+    for _,info in ipairs(infos) do
+        Lbl(pg,"  "..info, info:sub(1,1)=="⚠" and C.orange or C.dim)
+    end
+end
+
+-- ============================================================
+--  HALLOWEEN PAGE
 -- ============================================================
 do
     local pg=Pages["HALLOWEEN"]
-
-    -- Status bar
     local hsd,hsl=StatusBar(pg)
     hsl.TextColor3=C.orange
     task.spawn(function() while SG.Parent do task.wait(0.5)
@@ -1657,7 +1789,6 @@ do
         hsd.BackgroundColor3=Halloween.Active and C.orange or C.red
     end end)
 
-    -- Painel de destaque
     local hBanner=Instance.new("Frame",pg)
     hBanner.Size=UDim2.new(1,0,0,52); hBanner.BackgroundColor3=Color3.fromRGB(20,10,5)
     hBanner.BackgroundTransparency=0; hBanner.BorderSizePixel=0; Rnd(hBanner,8)
@@ -1676,8 +1807,6 @@ do
     hBannerS.TextXAlignment=Enum.TextXAlignment.Center; hBannerS.ZIndex=11
 
     Sec(pg,"🎃  MODO DO HALLOWEEN",C.orange)
-
-    -- Seletor de modo
     local modeRow=Instance.new("Frame",pg); modeRow.Size=UDim2.new(1,0,0,38); modeRow.BackgroundTransparency=1; modeRow.ZIndex=10
     Lst(modeRow,Enum.FillDirection.Horizontal,4,Enum.HorizontalAlignment.Left)
     local modeBtns={}
@@ -1703,7 +1832,6 @@ do
         b.MouseButton1Click:Connect(function() SetMode(m[1]) end)
     end
 
-    -- Mar seletor
     Sec(pg,"MAR ALVO",C.orange)
     local seaRow=Instance.new("Frame",pg); seaRow.Size=UDim2.new(1,0,0,36); seaRow.BackgroundTransparency=1; seaRow.ZIndex=10
     Lst(seaRow,Enum.FillDirection.Horizontal,4,Enum.HorizontalAlignment.Left)
@@ -1727,27 +1855,7 @@ do
     Tog(pg,"Auto Halloween Event",false,function(v) Halloween.Active=v end)
     Tog(pg,"Auto Summon Jack-o'-Lantern (50 Candy)",false,function(v) Halloween.AutoSummonJO=v end)
 
-    -- Descrição dos modos
-    Sec(pg,"MODOS — COMO FUNCIONA",C.orange)
-    local infoList = {
-        "🍬 CANDY: Farm automático de candies nos mobs de Halloween.",
-        "   Zombies (1° Mar) | Skeletons (2° Mar) | Gorillas (3° Mar)",
-        "🎃 JACK-O: Busca e mata Jack-o'-Lantern (summona com 50 Candy).",
-        "   Drops: Pumpkin Smasher (2.25%), Pumpkin Head, Hallo Shawl",
-        "💀 SKULL KING: Mata Skull King que spawna 1x/hora na Hallow Island.",
-        "   Drops: Bone Scythe, Sea King Skull, Candy",
-        "🐢 DEPTH KING: Novo Raid Boss Upd11 — Tartaruga gigante 3° Mar.",
-        "   Drops: Dread Broom, Depth King Armor, materiais raros",
-    }
-    for _,info in ipairs(infoList) do
-        Lbl(pg,"  "..info, info:sub(1,2)=="  " and C.dim or C.orange)
-    end
-
     Sec(pg,"CALIBRAR HALLOWEEN ISLANDS",C.orange)
-    Lbl(pg,"  1° Mar: entre Sky Island e Zombie Island", C.dim)
-    Lbl(pg,"  2° Mar: norte de Skull Island", C.dim)
-    Lbl(pg,"  3° Mar: oeste de Unearthly Shadows Island", C.dim)
-
     for _,hi in ipairs({{1,"1° Mar"},{2,"2° Mar"},{3,"3° Mar"}}) do
         local seaN, seaL = hi[1], hi[2]
         Lbl(pg,"  "..seaL..":")
@@ -1768,7 +1876,6 @@ do
         tpBtn.Size=UDim2.new(0.22,-6,1,0); tpBtn.BackgroundColor3=C.card; tpBtn.BackgroundTransparency=0
         tpBtn.Text="IR"; tpBtn.TextColor3=C.text; tpBtn.TextSize=9
         tpBtn.Font=Enum.Font.GothamBold; tpBtn.BorderSizePixel=0; Rnd(tpBtn,6); tpBtn.ZIndex=11
-
         local sn=seaN
         calBtn.MouseButton1Click:Connect(function()
             local c=LP.Character; if not c or not c:FindFirstChild("HumanoidRootPart") then return end
@@ -1776,9 +1883,7 @@ do
             posL.Text=("%.0f,%.0f,%.0f"):format(pos.X,pos.Y,pos.Z); posL.TextColor3=C.green
             hsl.Text=("OK Hallow "..seaL.." = %.0f,%.0f,%.0f"):format(pos.X,pos.Y,pos.Z)
         end)
-        tpBtn.MouseButton1Click:Connect(function()
-            SafeTP(HalloweenPos[sn])
-        end)
+        tpBtn.MouseButton1Click:Connect(function() SafeTP(HalloweenPos[sn]) end)
     end
 
     Sec(pg,"ESTILOS & CONFIGURAÇÃO",C.orange)
@@ -1786,21 +1891,19 @@ do
     Lbl(pg,"  Altura hover:"); Inp(pg,"6",function(v) local n=tonumber(v); if n then Halloween.HoverY=n end end).Text="6"
 
     Sec(pg,"DROPS — JACK-O'-LANTERN",C.orange)
-    local drops={
+    for _,d in ipairs({
         "Pumpkin Smasher  —  2.25% (ou 1000 Candy + 100 Logs)",
         "Pumpkin Head     —  4.5%  (ou 350 Candy)",
         "Hallo Shawl      —  6.75% (ou 750 Candy)",
         "Hallow Lamp      —  9%    (ou 500 Candy)",
-    }
-    for _,d in ipairs(drops) do Lbl(pg,"  🎃 "..d, C.gold) end
+    }) do Lbl(pg,"  🎃 "..d, C.gold) end
 
     Sec(pg,"DROPS — SKULL KING",C.orange)
-    local sdrops={
+    for _,d in ipairs({
         "Bone Scythe        —  3.375% (ou 1500 Candy + mats)",
         "Sea King Skull     —  4.5%   (ou 750 Candy + mats)",
         "Candy              —  drop comum",
-    }
-    for _,d in ipairs(sdrops) do Lbl(pg,"  💀 "..d, C.gold) end
+    }) do Lbl(pg,"  💀 "..d, C.gold) end
 end
 
 -- ============================================================
@@ -1823,17 +1926,10 @@ do
     end end)
 
     Sec(pg,"🍎  FRUIT NOTIFIER — Lendárias & Míticas")
-    Lbl(pg,"  Detecta frutas no mapa e notifica o Discord.", Color3.fromRGB(255,215,80))
     Tog(pg,"Ativar Fruit Notifier",false,function(v) FruitNotifier.Active=v end)
     Tog(pg,"Notificar TODAS as frutas",false,function(v) FruitNotifier.NotifyAll=v end)
     Tog(pg,"Auto Coletar ao detectar",false,function(v) FruitNotifier.AutoCollect=v end)
-
-    Sec(pg,"SERVER HOP AUTOMÁTICO")
-    Lbl(pg,"  Pula servidores até achar lendária, então para.")
     Tog(pg,"Server Hop (procurar lendária)",false,function(v) FruitNotifier.ServerHopOnFind=v end)
-
-    Sec(pg,"WEBHOOK DISCORD")
-    Inp(pg,"https://discord.com/api/webhooks/...",function(v) FruitNotifier.WebhookUrl=v end)
 
     Sec(pg,"SCAN MANUAL")
     Btn(pg,"🔍 ESCANEAR FRUTAS AGORA",function()
@@ -1851,14 +1947,13 @@ do
     Btn(pg,"Ir para Qualquer Fruta",TP_NearestFruit)
 
     Sec(pg,"FRUTAS LENDÁRIAS (Upd11)")
-    local fi={
+    for _,f in ipairs({
         "Erebus  (Mítica — Upd11, dragon negro)","Loki  (Lendária — Upd11)",
         "Pteranodon  (Mítica — Upd10)","Dragon  (Lendária, rework Upd11)",
         "Toy  (Lendária)","Phoenix  (Lendária)","Tree  (Lendária)","Demon  (Lendária)",
         "Gold  (Lendária)","Dough  (Lendária)","Leopard  (Lendária)",
         "Portal/Gate  (Lendária)","Gravity  (Lendária)","Shadow  (Lendária)",
-    }
-    for _,f in ipairs(fi) do Lbl(pg,"  🍎 "..f, C.gold) end
+    }) do Lbl(pg,"  🍎 "..f, C.gold) end
 end
 
 -- ============================================================
@@ -1962,7 +2057,6 @@ do
         local c=LP.Character
         if c then for _,p in ipairs(c:GetDescendants()) do if p:IsA("BasePart") then p.CanCollide=not v end end end
     end)
-    -- Mantém no-clip enquanto ativo (sem interferir com AttackMob)
     RunService.Stepped:Connect(function()
         if not noClipActive then return end
         local c=LP.Character; if not c then return end
@@ -2003,13 +2097,10 @@ do
     Sec(pg,"UTILITÁRIOS")
     Btn(pg,"Restaurar Colisão (fix flutuação)",function()
         SetCollision(true)
-        -- CORREÇÃO EXTRA: força Humanoid para estado normal
         local c=LP.Character
         if c then
             local hum=c:FindFirstChildOfClass("Humanoid")
-            if hum then
-                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-            end
+            if hum then hum:ChangeState(Enum.HumanoidStateType.GettingUp) end
         end
     end, false, Color3.fromRGB(0,80,40))
     Btn(pg,"Recarregar Personagem",function() SetCollision(true); LP:LoadCharacter() end)
@@ -2017,9 +2108,8 @@ do
     Btn(pg,"⛔ PARAR TUDO",function()
         Farm.Active=false; BossConfig.Active=false; DungeonConfig.Active=false
         SeaEvent.Active=false; AutoStats.Active=false; FruitNotifier.Active=false
-        Halloween.Active=false
+        Halloween.Active=false; AutoHoop.Active=false
         SetFly(false); SetHitbox(false,10); SetCollision(true)
-        -- Restaura estado do Humanoid
         local c=LP.Character
         if c then
             local hum=c:FindFirstChildOfClass("Humanoid")
@@ -2029,42 +2119,151 @@ do
 end
 
 -- ============================================================
---  WEBHOOK PAGE
+--  NTT JOIN PAGE — teleporte por código de servidor privado
 -- ============================================================
 do
-    local pg=Pages["WEBHOOK"]
-    Sec(pg,"📡  URL DO WEBHOOK DISCORD")
-    Lbl(pg,"  Cole o URL do seu webhook:")
-    local wuI=Inp(pg,"https://discord.com/api/webhooks/...",function(v) Cfg.WHUrl=v end)
+    local pg=Pages["NTT JOIN"]
 
-    Sec(pg,"NOTIFICAÇÕES AUTO")
-    Tog(pg,"Notificar frutas lendárias",false,function(v)
-        FruitNotifier.Active=v; FruitNotifier.WebhookUrl=Cfg.WHUrl
+    -- banner
+    local banner=Instance.new("Frame",pg)
+    banner.Size=UDim2.new(1,0,0,62); banner.BackgroundColor3=Color3.fromRGB(5,22,14)
+    banner.BackgroundTransparency=0; banner.BorderSizePixel=0; Rnd(banner,10)
+    Str(banner,C.green,2); banner.ZIndex=10
+
+    local bL=Instance.new("TextLabel",banner)
+    bL.Size=UDim2.new(1,0,0,30); bL.Position=UDim2.new(0,0,0,6)
+    bL.BackgroundTransparency=1; bL.Text="🔗  NTT JOIN — Servidor Privado"
+    bL.TextColor3=C.green; bL.TextSize=14; bL.Font=Enum.Font.GothamBold
+    bL.TextXAlignment=Enum.TextXAlignment.Center; bL.ZIndex=11
+
+    local bS=Instance.new("TextLabel",banner)
+    bS.Size=UDim2.new(1,0,0,20); bS.Position=UDim2.new(0,0,0,36)
+    bS.BackgroundTransparency=1
+    bS.Text="Cole o código NTT ou o link completo e aperte JOIN"
+    bS.TextColor3=C.dim; bS.TextSize=10; bS.Font=Enum.Font.Gotham
+    bS.TextXAlignment=Enum.TextXAlignment.Center; bS.ZIndex=11
+
+    -- status
+    local statF=Instance.new("Frame",pg)
+    statF.Size=UDim2.new(1,0,0,36); statF.BackgroundColor3=Color3.fromRGB(8,16,12)
+    statF.BackgroundTransparency=0; statF.BorderSizePixel=0; Rnd(statF,8)
+    Str(statF,Color3.fromRGB(20,60,36),1); statF.ZIndex=10
+
+    local statDot=Instance.new("Frame",statF)
+    statDot.Size=UDim2.new(0,8,0,8); statDot.Position=UDim2.new(0,12,0.5,-4)
+    statDot.BackgroundColor3=C.dim; statDot.BorderSizePixel=0; Rnd(statDot,4); statDot.ZIndex=11
+
+    local statLbl=Instance.new("TextLabel",statF)
+    statLbl.Size=UDim2.new(1,-30,1,0); statLbl.Position=UDim2.new(0,26,0,0)
+    statLbl.BackgroundTransparency=1; statLbl.Text="Aguardando código..."
+    statLbl.TextColor3=C.dim; statLbl.TextSize=10; statLbl.Font=Enum.Font.GothamBold
+    statLbl.TextXAlignment=Enum.TextXAlignment.Left; statLbl.ZIndex=11
+
+    Sec(pg,"CÓDIGO NTT / LINK COMPLETO",C.green)
+    Lbl(pg,"  Cole abaixo o código ou o link do servidor:")
+
+    -- input grande para o código
+    local codeBox=Instance.new("TextBox",pg)
+    codeBox.Size=UDim2.new(1,0,0,52); codeBox.BackgroundColor3=C.card
+    codeBox.BackgroundTransparency=0; codeBox.Text=""; codeBox.ClearTextOnFocus=false
+    codeBox.PlaceholderText="COLE O CÓDIGO NTT OU LINK AQUI..."
+    codeBox.PlaceholderColor3=C.dim; codeBox.TextColor3=C.green
+    codeBox.TextSize=10; codeBox.Font=Enum.Font.Gotham
+    codeBox.MultiLine=false; codeBox.TextXAlignment=Enum.TextXAlignment.Left
+    codeBox.BorderSizePixel=0; Rnd(codeBox,8); Str(codeBox,C.green,1.5)
+    Pad(codeBox,12,12,0,0); codeBox.ZIndex=10
+
+    -- Atualiza status ao digitar/colar
+    codeBox:GetPropertyChangedSignal("Text"):Connect(function()
+        local t=codeBox.Text
+        if t=="" then
+            statLbl.Text="Aguardando código..."; statLbl.TextColor3=C.dim; statDot.BackgroundColor3=C.dim
+        else
+            local extracted=t:match("privateServerLinkCode=([^&%s\n\r]+)") or t:gsub("%s+","")
+            if #extracted > 10 then
+                statLbl.Text="✅ Código detectado — aperte JOIN"; statLbl.TextColor3=C.green; statDot.BackgroundColor3=C.green
+            else
+                statLbl.Text="⚠ Código muito curto ou inválido"; statLbl.TextColor3=C.orange; statDot.BackgroundColor3=C.orange
+            end
+        end
     end)
 
-    Sec(pg,"ENVIO MANUAL")
-    Lbl(pg,"  Título:"); local wt=Inp(pg,"Título...")
-    Lbl(pg,"  Mensagem:"); local wm=Inp(pg,"Mensagem...")
-    Btn(pg,"Enviar",function() SendWebhook(Cfg.WHUrl, wt.Text, wm.Text, 3447003) end, true)
-    Btn(pg,"Testar Conexão",function()
-        SendWebhook(Cfg.WHUrl,"✅ Conexão OK","China Hub v8.0 | **"..LP.Name.."** | Lv "..GetLevel(), 65280)
+    -- botão JOIN
+    local joinBtn=Instance.new("TextButton",pg)
+    joinBtn.Size=UDim2.new(1,0,0,52); joinBtn.BackgroundColor3=C.green
+    joinBtn.BackgroundTransparency=0; joinBtn.Text="🔗  JOIN"
+    joinBtn.TextColor3=Color3.new(1,1,1); joinBtn.TextSize=16; joinBtn.Font=Enum.Font.GothamBold
+    joinBtn.BorderSizePixel=0; Rnd(joinBtn,10); joinBtn.ZIndex=10
+    -- glow verde
+    local jStr=Str(joinBtn,C.green,2)
+    local jGrad=Instance.new("UIGradient",joinBtn)
+    jGrad.Color=ColorSequence.new{
+        ColorSequenceKeypoint.new(0,  Color3.fromRGB(30,180,100)),
+        ColorSequenceKeypoint.new(0.5,Color3.fromRGB(55,220,110)),
+        ColorSequenceKeypoint.new(1,  Color3.fromRGB(30,180,100)),
+    }
+
+    joinBtn.MouseEnter:Connect(function()
+        TweenService:Create(joinBtn,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(80,255,150)}):Play()
+    end)
+    joinBtn.MouseLeave:Connect(function()
+        TweenService:Create(joinBtn,TweenInfo.new(0.1),{BackgroundColor3=C.green}):Play()
     end)
 
-    Sec(pg,"SERVIDOR ATUAL")
-    local jbl=Instance.new("TextLabel",pg); jbl.Size=UDim2.new(1,0,0,30)
-    jbl.BackgroundColor3=C.card; jbl.BackgroundTransparency=0; jbl.Text=tostring(game.JobId)
-    jbl.TextColor3=C.acc2; jbl.TextSize=10; jbl.Font=Enum.Font.Gotham
-    jbl.TextXAlignment=Enum.TextXAlignment.Center; jbl.BorderSizePixel=0; Rnd(jbl,6); jbl.ZIndex=10
-    Btn(pg,"Copiar JobId",function()
-        pcall(function() setclipboard(tostring(game.JobId)) end); jbl.Text="Copiado! "
+    joinBtn.MouseButton1Click:Connect(function()
+        local raw = codeBox.Text
+        if raw == "" then
+            statLbl.Text="⚠ Nenhum código inserido"; statLbl.TextColor3=C.red; statDot.BackgroundColor3=C.red
+            return
+        end
+        local ok, err = JoinNTT(raw)
+        if ok then
+            statLbl.Text="🔗 Teleportando..."; statLbl.TextColor3=C.green; statDot.BackgroundColor3=C.green
+            joinBtn.Text="🔗 Conectando..."; joinBtn.BackgroundColor3=Color3.fromRGB(20,120,70)
+        else
+            statLbl.Text="❌ Erro: "..tostring(err):sub(1,55)
+            statLbl.TextColor3=C.red; statDot.BackgroundColor3=C.red
+        end
     end)
-    Btn(pg,"Enviar Info do Servidor",function()
-        SendWebhook(Cfg.WHUrl,"🌐 Servidor King Legacy",
-            ("JobId: `%s`\nPlaceId: `%s`\nJogador: **%s**  Lv %d"):format(
-                tostring(game.JobId), tostring(game.PlaceId), LP.Name, GetLevel()),
-            10066329)
+
+    -- botão limpar
+    Btn(pg,"Limpar campo",function()
+        codeBox.Text=""
+        statLbl.Text="Aguardando código..."; statLbl.TextColor3=C.dim; statDot.BackgroundColor3=C.dim
+        joinBtn.Text="🔗  JOIN"; joinBtn.BackgroundColor3=C.green
     end)
+
+    Sec(pg,"COMO USAR",C.green)
+    for _,info in ipairs({
+        "1. Peça o link NTT para o dono do servidor.",
+        "2. Cole o link completo OU só o código.",
+        "3. Aperte JOIN — o jogo vai te teleportar.",
+        "",
+        "Formatos aceitos:",
+        "  • Código direto: aBcD3fGhIjKlMnOpQrSt",
+        "  • Link completo: roblox.com/games/...?privateServerLinkCode=...",
+    }) do Lbl(pg,"  "..info, info:find("•") and C.acc2 or C.dim) end
 end
+
+-- ============================================================
+--  BOTÃO MOSTRAR/OCULTAR (Ctrl)
+-- ============================================================
+local SBtn=Instance.new("TextButton",SG)
+SBtn.Size=UDim2.new(0,180,0,32); SBtn.Position=UDim2.new(0,20,0,55)
+SBtn.BackgroundColor3=C.side; SBtn.BackgroundTransparency=0
+SBtn.Text="🔀 CHINA HUB v8.1 | Upd11"; SBtn.TextColor3=C.teal
+SBtn.TextSize=10; SBtn.Font=Enum.Font.GothamBold; SBtn.BorderSizePixel=0; SBtn.Visible=false
+Rnd(SBtn,8); Str(SBtn,C.teal,1.5); SBtn.ZIndex=10
+
+local function TogVis()
+    if WIN.Visible then WIN.Visible=false; shadow.Visible=false; SBtn.Visible=true
+    else WIN.Visible=true; shadow.Visible=true; SBtn.Visible=false end
+end
+SBtn.MouseButton1Click:Connect(TogVis)
+UserInputService.InputBegan:Connect(function(i,gpe)
+    if gpe then return end
+    if i.UserInputType==Enum.UserInputType.Keyboard and i.KeyCode==Cfg.HideKey then TogVis() end
+end)
 
 -- ============================================================
 --  ESP UPDATE
@@ -2138,8 +2337,9 @@ local function UpdBoss()
             local d=Dist(hrp.Position); if d>Cfg.ESPRange then continue end
             local p2D,_,onS=W2V(hrp.Position+Vector3.new(0,5,0)); if not onS then continue end
             local hum=boss:FindFirstChildOfClass("Humanoid")
-            local col = (b.name=="Depth King" or b.name=="Skull King" or b.name=="Jack-o-Lantern")
-                and C.orange or Cfg.Col_Boss
+            local isSea3 = (b.name=="Drakenfyr" or b.name=="Chaos Kraken" or b.name=="Abyssal Tyrant" or b.name=="Crab King")
+            local isHall = (b.name=="Depth King" or b.name=="Skull King" or b.name=="Jack-o-Lantern")
+            local col = isHall and C.orange or (isSea3 and C.teal or Cfg.Col_Boss)
             local l=NTxt(col,14); l.Text="⚔ "..b.name; l.Position=Vector2.new(p2D.X,p2D.Y-14); l.Visible=true
             local dl=NTxt(Color3.new(1,1,1),11); dl.Text=d.."m  HP "..(hum and math.floor(hum.Health) or "?"); dl.Position=Vector2.new(p2D.X,p2D.Y+2); dl.Visible=true
             table.insert(BossPool,{lbl=l,d=dl})
@@ -2148,29 +2348,9 @@ local function UpdBoss()
 end
 
 -- ============================================================
---  BOTÃO MOSTRAR/OCULTAR (Ctrl)
--- ============================================================
-local SBtn=Instance.new("TextButton",SG)
-SBtn.Size=UDim2.new(0,170,0,32); SBtn.Position=UDim2.new(0,20,0,55)
-SBtn.BackgroundColor3=C.side; SBtn.BackgroundTransparency=0
-SBtn.Text="🎃 CHINA HUB v8.0 | Upd11"; SBtn.TextColor3=C.orange
-SBtn.TextSize=10; SBtn.Font=Enum.Font.GothamBold; SBtn.BorderSizePixel=0; SBtn.Visible=false
-Rnd(SBtn,8); Str(SBtn,C.orange,1.5); SBtn.ZIndex=10
-
-local function TogVis()
-    if WIN.Visible then WIN.Visible=false; shadow.Visible=false; SBtn.Visible=true
-    else WIN.Visible=true; shadow.Visible=true; SBtn.Visible=false end
-end
-SBtn.MouseButton1Click:Connect(TogVis)
-UserInputService.InputBegan:Connect(function(i,gpe)
-    if gpe then return end
-    if i.UserInputType==Enum.UserInputType.Keyboard and i.KeyCode==Cfg.HideKey then TogVis() end
-end)
-
--- ============================================================
 --  INIT
 -- ============================================================
-Switch("HALLOWEEN")  -- abre na aba do evento por padrão
+Switch("SEA HOOP")
 for _,pl in ipairs(Players:GetPlayers()) do MkESP(pl) end
 Players.PlayerAdded:Connect(function(pl) task.wait(1); MkESP(pl) end)
 Players.PlayerRemoving:Connect(KillESP)
@@ -2185,4 +2365,4 @@ RunService.RenderStepped:Connect(function()
     if espT%12==0 then UpdF(); UpdBoss(); espT=0 end
 end)
 
-print("[China Hub Free v8.0 | Update 11 Halloween] carregado — "..LP.Name)
+print("[China Hub Free v8.1 | Update 11] carregado — "..LP.Name)
